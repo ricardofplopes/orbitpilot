@@ -36,12 +36,12 @@ const WorkPage: React.FC = () => {
   const { data: teamsList } = useApi<Team[]>(() => teamsApi.getTeams());
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<WorkItem | null>(null);
-  const [form, setForm] = useState({ title: '', description: '', status: 'todo', priority: 'medium', storyPoints: 0, teamId: '', assignee: '' });
+  const [form, setForm] = useState({ title: '', description: '', status: 'todo', priority: 'P2', storyPoints: 0, teamId: '', assignee: '' });
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
 
   const openCreate = () => {
-    setForm({ title: '', description: '', status: 'todo', priority: 'medium', storyPoints: 0, teamId: '', assignee: '' });
+    setForm({ title: '', description: '', status: 'todo', priority: 'P2', storyPoints: 0, teamId: '', assignee: '' });
     setShowCreate(true);
   };
 
@@ -116,10 +116,10 @@ const WorkPage: React.FC = () => {
         <div className="space-y-1">
           <label className="block text-sm font-medium text-orbit-slate">Priority</label>
           <select className="input" value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
+            <option value="">None</option>
+            <option value="P1">P1 - Critical</option>
+            <option value="P2">P2 - Standard</option>
+            <option value="P3">P3 - Low</option>
           </select>
         </div>
       </div>

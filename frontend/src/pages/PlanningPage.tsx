@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Calendar, Trash2, AlertTriangle } from 'lucide-react';
+import { Plus, Calendar, Trash2, AlertTriangle, Pencil } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { planning, teams as teamsApi } from '@/api/services';
 import Modal from '@/components/common/Modal';
@@ -21,10 +21,10 @@ const statusVariant = (s: string) => {
 };
 
 const priorityVariant = (p: string) => {
-  switch (p?.toLowerCase()) {
-    case 'critical': return 'red' as const;
-    case 'high': return 'amber' as const;
-    case 'medium': return 'blue' as const;
+  switch (p) {
+    case 'P1': return 'red' as const;
+    case 'P2': return 'amber' as const;
+    case 'P3': return 'blue' as const;
     default: return 'slate' as const;
   }
 };
@@ -33,8 +33,8 @@ const PlanningPage: React.FC = () => {
   const { data: quarters, loading, error, refetch } = useApi<QuarterPlan[]>(() => planning.getQuarters());
   const { data: teamsList } = useApi<Team[]>(() => teamsApi.getTeams());
   const [selectedQuarter, setSelectedQuarter] = useState<string>('');
-  const { data: quarterDetail, refetch: refetchDetail } = useApi<QuarterPlan>(
-    () => selectedQuarter ? planning.getQuarter(selectedQuarter) : Promise.resolve(null as any),
+  const { data: quarterDetail, refetch: refetchDetail } = useApi<QuarterPlan | null>(
+    () => selectedQuarter ? planning.getQuarter(selectedQuarter) : Promise.resolve(null),
     [selectedQuarter]
   );
 
@@ -42,8 +42,9 @@ const PlanningPage: React.FC = () => {
   const [showInitiativeModal, setShowInitiativeModal] = useState(false);
   const [editingInit, setEditingInit] = useState<Initiative | null>(null);
   const [quarterForm, setQuarterForm] = useState({ name: '', startDate: '', endDate: '' });
-  const [initForm, setInitForm] = useState({ title: '', description: '', teamId: '', priority: 'medium', estimatedEffort: 0, status: 'planned' });
+  const [initForm, setInitForm] = useState({ title: '', description: '', teamId: '', priority: 'P2', estimatedEffort: 0, status: 'planned' });
   const [saving, setSaving] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   // Auto-select first quarter
   React.useEffect(() => {
@@ -54,12 +55,15 @@ const PlanningPage: React.FC = () => {
 
   const handleCreateQuarter = async () => {
     setSaving(true);
+    setMutationError(null);
     try {
       const q = await planning.createQuarter(quarterForm);
       setShowQuarterModal(false);
       setQuarterForm({ name: '', startDate: '', endDate: '' });
       refetch();
       setSelectedQuarter(q.id);
+    } catch (err: any) {
+      setMutationError(err?.response?.data?.message || 'Failed to create quarter');
     } finally {
       setSaving(false);
     }
@@ -68,11 +72,14 @@ const PlanningPage: React.FC = () => {
   const handleCreateInitiative = async () => {
     if (!selectedQuarter) return;
     setSaving(true);
+    setMutationError(null);
     try {
       await planning.createInitiative(selectedQuarter, initForm);
       setShowInitiativeModal(false);
-      setInitForm({ title: '', description: '', teamId: '', priority: 'medium', estimatedEffort: 0, status: 'planned' });
+      setInitForm({ title: '', description: '', teamId: '', priority: 'P2', estimatedEffort: 0, status: 'planned' });
       refetchDetail();
+    } catch (err: any) {
+      setMutationError(err?.response?.data?.message || 'Failed to create initiative');
     } finally {
       setSaving(false);
     }
@@ -81,12 +88,25 @@ const PlanningPage: React.FC = () => {
   const handleUpdateInitiative = async () => {
     if (!editingInit) return;
     setSaving(true);
+    setMutationError(null);
     try {
       await planning.updateInitiative(editingInit.id, initForm);
       setEditingInit(null);
       refetchDetail();
+    } catch (err: any) {
+      setMutationError(err?.response?.data?.message || 'Failed to update initiative');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteInitiative = async (id: string) => {
+    if (!confirm('Delete this initiative? This cannot be undone.')) return;
+    try {
+      await planning.deleteInitiative(id);
+      refetchDetail();
+    } catch (err: any) {
+      setMutationError(err?.response?.data?.message || 'Failed to delete initiative');
     }
   };
 
@@ -129,7 +149,7 @@ const PlanningPage: React.FC = () => {
           <Button variant="secondary" onClick={() => setShowQuarterModal(true)}>
             <Calendar className="w-4 h-4" /> New Quarter
           </Button>
-          <Button onClick={() => { setInitForm({ title: '', description: '', teamId: '', priority: 'medium', estimatedEffort: 0, status: 'planned' }); setShowInitiativeModal(true); }} disabled={!selectedQuarter}>
+          <Button onClick={() => { setInitForm({ title: '', description: '', teamId: '', priority: 'P2', estimatedEffort: 0, status: 'planned' }); setShowInitiativeModal(true); }} disabled={!selectedQuarter}>
             <Plus className="w-4 h-4" /> Add Initiative
           </Button>
         </div>
@@ -155,32 +175,37 @@ const PlanningPage: React.FC = () => {
         </div>
       )}
 
-      {/* Capacity Impact Summary */}
-      {initiatives.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="card">
-            <p className="text-sm text-orbit-slate">Initiatives</p>
-            <p className="text-2xl font-bold text-orbit-blue">{initiatives.length}</p>
-          </div>
-          <div className="card">
-            <p className="text-sm text-orbit-slate">Total Effort</p>
-            <p className="text-2xl font-bold text-orbit-purple">{totalEffort} pts</p>
-          </div>
-          <div className="card">
-            <p className="text-sm text-orbit-slate">Completed</p>
-            <p className="text-2xl font-bold text-orbit-green">{completedCount} / {initiatives.length}</p>
-          </div>
-          <div className="card">
-            <p className="text-sm text-orbit-slate">Progress</p>
-            <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 h-3 bg-orbit-navy rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-brand rounded-full transition-all" style={{ width: `${initiatives.length > 0 ? (completedCount / initiatives.length) * 100 : 0}%` }} />
-              </div>
-              <span className="text-sm font-bold text-orbit-light">{initiatives.length > 0 ? Math.round((completedCount / initiatives.length) * 100) : 0}%</span>
-            </div>
-          </div>
+      {mutationError && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 flex items-center justify-between">
+          <span className="text-sm text-red-400">{mutationError}</span>
+          <button onClick={() => setMutationError(null)} className="text-red-400 hover:text-red-300 text-sm">✕</button>
         </div>
       )}
+
+      {/* Capacity Impact Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="card">
+          <p className="text-sm text-orbit-slate">Initiatives</p>
+          <p className="text-2xl font-bold text-orbit-blue">{initiatives.length}</p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-orbit-slate">Total Effort</p>
+          <p className="text-2xl font-bold text-orbit-purple">{totalEffort} pts</p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-orbit-slate">Completed</p>
+          <p className="text-2xl font-bold text-orbit-green">{completedCount} / {initiatives.length}</p>
+        </div>
+        <div className="card">
+          <p className="text-sm text-orbit-slate">Progress</p>
+          <div className="flex items-center gap-2 mt-1">
+            <div className="flex-1 h-3 bg-orbit-navy rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-brand rounded-full transition-all" style={{ width: `${initiatives.length > 0 ? (completedCount / initiatives.length) * 100 : 0}%` }} />
+            </div>
+            <span className="text-sm font-bold text-orbit-light">{initiatives.length > 0 ? Math.round((completedCount / initiatives.length) * 100) : 0}%</span>
+          </div>
+        </div>
+      </div>
 
       {/* Effort by Team (capacity impact) */}
       {Object.keys(effortByTeam).length > 0 && (
@@ -282,17 +307,16 @@ const PlanningPage: React.FC = () => {
             <div className="space-y-1">
               <label className="block text-sm font-medium text-orbit-slate">Priority</label>
               <select className="input" value={initForm.priority} onChange={(e) => setInitForm({ ...initForm, priority: e.target.value })}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
+                <option value="P1">P1 - Critical</option>
+                <option value="P2">P2 - Standard</option>
+                <option value="P3">P3 - Low</option>
               </select>
             </div>
             <Input label="Estimated Effort (pts)" type="number" value={String(initForm.estimatedEffort)} onChange={(e) => setInitForm({ ...initForm, estimatedEffort: Number(e.target.value) })} />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setShowInitiativeModal(false)}>Cancel</Button>
-            <Button onClick={handleCreateInitiative} loading={saving}>Create</Button>
+            <Button onClick={handleCreateInitiative} loading={saving} disabled={!initForm.title.trim()}>Create</Button>
           </div>
         </div>
       </Modal>
@@ -316,10 +340,9 @@ const PlanningPage: React.FC = () => {
             <div className="space-y-1">
               <label className="block text-sm font-medium text-orbit-slate">Priority</label>
               <select className="input" value={initForm.priority} onChange={(e) => setInitForm({ ...initForm, priority: e.target.value })}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
+                <option value="P1">P1 - Critical</option>
+                <option value="P2">P2 - Standard</option>
+                <option value="P3">P3 - Low</option>
               </select>
             </div>
             <div className="space-y-1">

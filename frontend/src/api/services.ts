@@ -106,6 +106,9 @@ export const planning = {
     const { data } = await client.put<Initiative>(`/planning/initiatives/${id}`, payload);
     return data;
   },
+  deleteInitiative: async (id: string) => {
+    await client.delete(`/planning/initiatives/${id}`);
+  },
 };
 
 // Work
