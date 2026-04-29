@@ -1,4 +1,4 @@
-import { Controller, Get, Logger, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { JiraService } from './jira.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -21,6 +21,12 @@ export class JiraController {
     return this.jiraService.getAuthUrl();
   }
 
+  @Post('connect-token')
+  @UseGuards(JwtAuthGuard)
+  async connectWithToken(@Body() body: { baseUrl: string; email: string; apiToken: string }) {
+    return this.jiraService.connectWithApiToken(body.baseUrl, body.email, body.apiToken);
+  }
+
   // No auth guard — called by Atlassian's OAuth redirect
   @Get('callback')
   async handleCallback(
@@ -32,7 +38,6 @@ export class JiraController {
   ) {
     const appUrl = process.env.APP_URL || 'http://localhost:3200';
 
-    // Atlassian may redirect with an error (user denied access, etc.)
     if (error) {
       this.logger.warn(`Jira OAuth denied: ${error} - ${errorDescription}`);
       return res.redirect(`${appUrl}/integrations?error=${encodeURIComponent(errorDescription || error)}`);

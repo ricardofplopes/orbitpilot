@@ -148,6 +148,10 @@ export const integrations = {
     const { data } = await client.get<{ url: string }>('/integrations/jira/auth-url');
     return data;
   },
+  connectJiraToken: async (baseUrl: string, email: string, apiToken: string) => {
+    const { data } = await client.post<{ success: boolean; siteName: string }>('/integrations/jira/connect-token', { baseUrl, email, apiToken });
+    return data;
+  },
   disconnectJira: async () => {
     const { data } = await client.post('/integrations/jira/disconnect');
     return data;

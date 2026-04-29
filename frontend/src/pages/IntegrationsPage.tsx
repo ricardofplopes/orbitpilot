@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { integrations } from '@/api/services';
 import IntegrationCard from '@/components/cards/IntegrationCard';
 import Spinner from '@/components/common/Spinner';
+import { CheckCircle, XCircle, ExternalLink, Unplug, Key, Loader2 } from 'lucide-react';
 
 const JiraIcon = () => (
   <svg viewBox="0 0 24 24" className="w-6 h-6" fill="#2563EB">
@@ -19,10 +20,176 @@ const GithubIcon = () => (
 interface IntegrationStatus {
   isActive: boolean;
   isOAuthConfigured: boolean;
+  authType?: string;
   connectedAccount?: string | null;
   connectedSite?: string | null;
+  connectedUser?: string | null;
   lastSyncAt?: string;
 }
+
+const JiraCard: React.FC<{
+  status: IntegrationStatus;
+  onStatusChange: () => void;
+  onError: (msg: string) => void;
+  onSuccess: (msg: string) => void;
+}> = ({ status, onStatusChange, onError, onSuccess }) => {
+  const [mode, setMode] = useState<'choose' | 'token'>('choose');
+  const [loading, setLoading] = useState(false);
+  const [tokenForm, setTokenForm] = useState({ baseUrl: '', email: '', apiToken: '' });
+
+  const handleOAuth = async () => {
+    setLoading(true);
+    try {
+      const { url } = await integrations.getJiraAuthUrl();
+      window.location.href = url;
+    } catch (err: any) {
+      onError(err?.response?.data?.message || 'Failed to start OAuth flow');
+      setLoading(false);
+    }
+  };
+
+  const handleTokenConnect = async () => {
+    if (!tokenForm.baseUrl || !tokenForm.email || !tokenForm.apiToken) return;
+    setLoading(true);
+    try {
+      const result = await integrations.connectJiraToken(tokenForm.baseUrl, tokenForm.email, tokenForm.apiToken);
+      onSuccess(`Connected to Jira: ${result.siteName}`);
+      onStatusChange();
+      setMode('choose');
+      setTokenForm({ baseUrl: '', email: '', apiToken: '' });
+    } catch (err: any) {
+      onError(err?.response?.data?.message || 'Failed to connect with API token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setLoading(true);
+    try {
+      await integrations.disconnectJira();
+      onStatusChange();
+    } catch {
+      onError('Failed to disconnect');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (status.isActive) {
+    return (
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-orbit-navy flex items-center justify-center"><JiraIcon /></div>
+            <div>
+              <h3 className="font-semibold text-orbit-light">Jira</h3>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs text-emerald-400">Connected ({status.authType === 'api-token' ? 'API Token' : 'OAuth'})</span>
+              </div>
+            </div>
+          </div>
+          {status.lastSyncAt && <span className="text-xs text-orbit-slate">Last sync: {new Date(status.lastSyncAt).toLocaleString()}</span>}
+        </div>
+        <div className="flex items-center gap-2 p-3 rounded-lg mb-4 bg-emerald-500/10 text-emerald-400 text-sm">
+          <CheckCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Connected to <strong>{status.connectedSite || 'Jira'}</strong>{status.connectedUser ? ` as ${status.connectedUser}` : ''}</span>
+        </div>
+        <button onClick={handleDisconnect} disabled={loading} className="btn-secondary flex items-center gap-2">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unplug className="w-4 h-4" />}
+          Disconnect
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-lg bg-orbit-navy flex items-center justify-center"><JiraIcon /></div>
+        <div>
+          <h3 className="font-semibold text-orbit-light">Jira</h3>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <XCircle className="w-3.5 h-3.5 text-orbit-slate" />
+            <span className="text-xs text-orbit-slate">Not connected</span>
+          </div>
+        </div>
+      </div>
+      <p className="text-sm text-orbit-slate mb-5">Connect your Atlassian Jira to sync issues, epics, and sprint data.</p>
+
+      {mode === 'choose' && (
+        <div className="space-y-3">
+          <button onClick={handleOAuth} disabled={loading || !status.isOAuthConfigured} className="btn-primary w-full flex items-center justify-center gap-2">
+            <ExternalLink className="w-4 h-4" />
+            Connect with OAuth
+          </button>
+          {!status.isOAuthConfigured && (
+            <p className="text-xs text-orbit-slate text-center">OAuth requires JIRA_CLIENT_ID/SECRET env vars</p>
+          )}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-orbit-card" /></div>
+            <div className="relative flex justify-center text-xs"><span className="px-2 bg-orbit-card text-orbit-slate">or</span></div>
+          </div>
+          <button onClick={() => setMode('token')} className="btn-secondary w-full flex items-center justify-center gap-2">
+            <Key className="w-4 h-4" />
+            Connect with API Token
+          </button>
+        </div>
+      )}
+
+      {mode === 'token' && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-orbit-slate mb-1">Jira Base URL</label>
+            <input
+              className="input"
+              placeholder="https://yoursite.atlassian.net"
+              value={tokenForm.baseUrl}
+              onChange={(e) => setTokenForm({ ...tokenForm, baseUrl: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-orbit-slate mb-1">Email</label>
+            <input
+              className="input"
+              placeholder="you@company.com"
+              value={tokenForm.email}
+              onChange={(e) => setTokenForm({ ...tokenForm, email: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-orbit-slate mb-1">API Token</label>
+            <input
+              className="input"
+              type="password"
+              placeholder="Your Jira API token"
+              value={tokenForm.apiToken}
+              onChange={(e) => setTokenForm({ ...tokenForm, apiToken: e.target.value })}
+            />
+            <p className="text-xs text-orbit-slate mt-1">
+              Create at{' '}
+              <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer" className="text-orbit-blue hover:underline">
+                id.atlassian.com → Security → API tokens
+              </a>
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleTokenConnect}
+              disabled={loading || !tokenForm.baseUrl || !tokenForm.email || !tokenForm.apiToken}
+              className="btn-primary flex-1 flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              Connect
+            </button>
+            <button onClick={() => setMode('choose')} className="btn-secondary">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const IntegrationsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -53,7 +220,6 @@ const IntegrationsPage: React.FC = () => {
     loadStatuses();
   }, [loadStatuses]);
 
-  // Handle OAuth callback redirect (e.g. /integrations?connected=github or /integrations?error=...)
   useEffect(() => {
     const connected = searchParams.get('connected');
     const error = searchParams.get('error');
@@ -76,7 +242,7 @@ const IntegrationsPage: React.FC = () => {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-orbit-light">Integrations</h2>
-        <p className="text-sm text-orbit-slate mt-1">Connect your tools with one click using OAuth</p>
+        <p className="text-sm text-orbit-slate mt-1">Connect your tools using OAuth or API tokens</p>
       </div>
 
       {successMessage && (
@@ -97,29 +263,18 @@ const IntegrationsPage: React.FC = () => {
               <a href="https://developer.atlassian.com/console/myapps/" target="_blank" rel="noopener noreferrer" className="underline hover:text-red-300">
                 developer.atlassian.com → My Apps → Permissions
               </a>{' '}
-              and add "Jira platform REST API" with classic scopes (read:jira-work, read:jira-user, write:jira-work).
+              and add "Jira platform REST API" with classic scopes. Or use the API Token option instead.
             </p>
           )}
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <IntegrationCard
-          title="Jira"
-          description="Connect your Atlassian account to sync Jira issues, epics, and sprint data automatically."
-          icon={<JiraIcon />}
-          isConnected={jiraStatus.isActive}
-          isOAuthConfigured={jiraStatus.isOAuthConfigured}
-          connectedAccount={jiraStatus.connectedSite}
-          lastSyncAt={jiraStatus.lastSyncAt}
-          onConnect={async () => {
-            const { url } = await integrations.getJiraAuthUrl();
-            window.location.href = url;
-          }}
-          onDisconnect={async () => {
-            await integrations.disconnectJira();
-            setJiraStatus({ ...jiraStatus, isActive: false, connectedSite: null });
-          }}
+        <JiraCard
+          status={jiraStatus}
+          onStatusChange={loadStatuses}
+          onError={(msg) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(null), 10000); }}
+          onSuccess={(msg) => { setSuccessMessage(msg); setTimeout(() => setSuccessMessage(null), 8000); }}
         />
 
         <IntegrationCard

@@ -45,8 +45,10 @@ export class JiraService {
       type: config.type,
       isActive: config.isActive,
       isOAuthConfigured: this.isOAuthConfigured,
+      authType: cfg?.authType || 'oauth',
       lastSyncAt: config.lastSyncAt,
       connectedSite: cfg?.siteName || cfg?.cloudId || null,
+      connectedUser: cfg?.connectedUser || null,
     };
   }
 
@@ -151,6 +153,60 @@ export class JiraService {
     }
 
     return `${this.appUrl}/integrations?connected=jira`;
+  }
+
+  async connectWithApiToken(baseUrl: string, email: string, apiToken: string): Promise<{ success: boolean; siteName: string }> {
+    // Validate by calling Jira REST API with basic auth
+    const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+    const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+
+    this.logger.log(`Testing API token connection to ${cleanBaseUrl}...`);
+
+    const response = await fetch(`${cleanBaseUrl}/rest/api/3/myself`, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error(`API token validation failed: ${response.status} - ${errorText}`);
+      throw new BadRequestException(
+        response.status === 401
+          ? 'Invalid email or API token. Check your credentials.'
+          : `Jira connection failed (${response.status}). Check your Base URL.`,
+      );
+    }
+
+    const user = await response.json();
+    this.logger.log(`API token validated. Connected as: ${user.displayName} (${user.emailAddress})`);
+
+    // Extract site name from base URL
+    const siteName = new URL(cleanBaseUrl).hostname.replace('.atlassian.net', '');
+
+    const configData = {
+      authType: 'api-token',
+      baseUrl: cleanBaseUrl,
+      email,
+      apiToken,
+      siteName,
+      connectedUser: user.displayName,
+    };
+
+    const existing = await this.prisma.integrationConfig.findFirst({ where: { type: 'jira' } });
+    if (existing) {
+      await this.prisma.integrationConfig.update({
+        where: { id: existing.id },
+        data: { config: configData as any, isActive: true, lastSyncAt: new Date() },
+      });
+    } else {
+      await this.prisma.integrationConfig.create({
+        data: { type: 'jira', config: configData as any, isActive: true, lastSyncAt: new Date() },
+      });
+    }
+
+    return { success: true, siteName: `${siteName} (${user.displayName})` };
   }
 
   async disconnect() {
