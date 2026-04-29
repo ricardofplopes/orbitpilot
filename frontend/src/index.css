@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-orbit-navy text-orbit-light antialiased;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0F172A;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+}
+
+@layer components {
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-brand;
+  }
+
+  .card {
+    @apply bg-orbit-card rounded-xl border border-orbit-navy-lighter/50 p-5 transition-all duration-200;
+  }
+
+  .card:hover {
+    @apply border-orbit-blue/30 shadow-glow-blue;
+  }
+
+  .glow-border {
+    @apply border border-orbit-blue/20 shadow-glow-blue;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 rounded-lg bg-gradient-brand text-white font-medium
+           hover:opacity-90 transition-all duration-200 disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 rounded-lg bg-orbit-navy-lighter text-orbit-light font-medium
+           border border-orbit-navy-lighter hover:border-orbit-blue/30 transition-all duration-200;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 rounded-lg bg-orbit-navy border border-orbit-navy-lighter
+           text-orbit-light placeholder-orbit-slate focus:outline-none focus:border-orbit-blue
+           focus:ring-1 focus:ring-orbit-blue transition-all duration-200;
+  }
+}

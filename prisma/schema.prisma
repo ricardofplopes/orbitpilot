@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  name         String
+  passwordHash String       @map("password_hash")
+  role         String       @default("member")
+  avatarUrl    String?      @map("avatar_url")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  teamMembers  TeamMember[]
+
+  @@map("users")
+}
+
+model Team {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  color       String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  members     TeamMember[]
+  initiatives Initiative[]
+  workItems   WorkItem[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  id             String         @id @default(uuid())
+  userId         String         @map("user_id")
+  teamId         String         @map("team_id")
+  role           String         @default("engineer")
+  weeklyCapacity Float          @default(40) @map("weekly_capacity")
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team           Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  availability   Availability[]
+
+  @@unique([userId, teamId])
+  @@map("team_members")
+}
+
+model CapacityPeriod {
+  id        String   @id @default(uuid())
+  name      String
+  startDate DateTime @map("start_date")
+  endDate   DateTime @map("end_date")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("capacity_periods")
+}
+
+model Availability {
+  id           String     @id @default(uuid())
+  teamMemberId String     @map("team_member_id")
+  date         DateTime
+  type         String
+  hours        Float      @default(0)
+  teamMember   TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+
+  @@map("availability")
+}
+
+model QuarterPlan {
+  id          String       @id @default(uuid())
+  name        String
+  startDate   DateTime     @map("start_date")
+  endDate     DateTime     @map("end_date")
+  status      String       @default("draft")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  initiatives Initiative[]
+
+  @@map("quarter_plans")
+}
+
+model Initiative {
+  id              String      @id @default(uuid())
+  title           String
+  description     String?
+  quarterPlanId   String      @map("quarter_plan_id")
+  teamId          String?     @map("team_id")
+  priority        String      @default("P2")
+  estimatedEffort Float?      @map("estimated_effort")
+  status          String      @default("planned")
+  quarterPlan     QuarterPlan @relation(fields: [quarterPlanId], references: [id], onDelete: Cascade)
+  team            Team?       @relation(fields: [teamId], references: [id])
+  workItems       WorkItem[]
+
+  @@map("initiatives")
+}
+
+model WorkItem {
+  id           String      @id @default(uuid())
+  externalId   String?     @map("external_id")
+  source       String      @default("manual")
+  title        String
+  description  String?
+  status       String      @default("todo")
+  priority     String?
+  storyPoints  Float?      @map("story_points")
+  assignee     String?
+  teamId       String?     @map("team_id")
+  initiativeId String?     @map("initiative_id")
+  cycleTime    Float?      @map("cycle_time")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  team         Team?       @relation(fields: [teamId], references: [id])
+  initiative   Initiative? @relation(fields: [initiativeId], references: [id])
+
+  @@map("work_items")
+}
+
+model IntegrationConfig {
+  id         String    @id @default(uuid())
+  type       String
+  config     Json
+  isActive   Boolean   @default(false) @map("is_active")
+  lastSyncAt DateTime? @map("last_sync_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@map("integration_configs")
+}
+
+model Insight {
+  id        String   @id @default(uuid())
+  type      String
+  severity  String   @default("info")
+  message   String
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("insights")
+}

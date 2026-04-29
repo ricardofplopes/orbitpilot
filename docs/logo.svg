@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" fill="none">
+  <rect width="800" height="200" rx="16" fill="#0F172A"/>
+  <defs>
+    <linearGradient id="brand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="orbit-ring" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2563EB" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#7C3AED" stop-opacity="0.8"/>
+    </linearGradient>
+  </defs>
+  <!-- Planet/orbit icon -->
+  <circle cx="100" cy="100" r="28" fill="url(#brand-grad)"/>
+  <ellipse cx="100" cy="100" rx="50" ry="18" stroke="url(#orbit-ring)" stroke-width="3" fill="none" transform="rotate(-20 100 100)"/>
+  <circle cx="130" cy="82" r="6" fill="#7C3AED"/>
+  <!-- Brand text -->
+  <text x="170" y="112" font-family="Inter, system-ui, sans-serif" font-size="52" font-weight="700" fill="white">Orbit<tspan fill="url(#brand-grad)">Pilot</tspan></text>
+  <!-- Tagline -->
+  <text x="170" y="145" font-family="Inter, system-ui, sans-serif" font-size="18" fill="#94A3B8">Plan better. Deliver together.</text>
+</svg>
