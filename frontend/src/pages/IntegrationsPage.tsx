@@ -86,9 +86,20 @@ const IntegrationsPage: React.FC = () => {
       )}
 
       {errorMessage && (
-        <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
-          <span>✕ {errorMessage}</span>
-          <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-300 ml-2">✕</button>
+        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-sm space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-red-400 font-medium">✕ {errorMessage}</span>
+            <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-300">✕</button>
+          </div>
+          {errorMessage.includes('authorization_code') && (
+            <p className="text-red-300/70 text-xs">
+              This usually means your Atlassian app needs Jira API scopes configured. Go to{' '}
+              <a href="https://developer.atlassian.com/console/myapps/" target="_blank" rel="noopener noreferrer" className="underline hover:text-red-300">
+                developer.atlassian.com → My Apps → Permissions
+              </a>{' '}
+              and add "Jira platform REST API" with classic scopes (read:jira-work, read:jira-user, write:jira-work).
+            </p>
+          )}
         </div>
       )}
 

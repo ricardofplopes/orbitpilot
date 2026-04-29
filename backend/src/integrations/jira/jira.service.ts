@@ -55,16 +55,25 @@ export class JiraService {
       throw new BadRequestException('Jira OAuth is not configured. Set JIRA_CLIENT_ID and JIRA_CLIENT_SECRET environment variables.');
     }
     const state = this.createState();
+    const redirectUri = `${this.appUrl}/api/integrations/jira/callback`;
+    const scopes = process.env.JIRA_SCOPES || 'read:jira-work read:jira-user write:jira-work';
+
+    // Build URL manually to ensure proper %20 encoding (not +) for scopes
     const params = new URLSearchParams({
       audience: 'api.atlassian.com',
       client_id: this.clientId!,
-      scope: 'read:jira-work read:jira-user manage:jira-project offline_access',
-      redirect_uri: `${this.appUrl}/api/integrations/jira/callback`,
+      scope: scopes,
+      redirect_uri: redirectUri,
       state,
       response_type: 'code',
       prompt: 'consent',
     });
-    return { url: `https://auth.atlassian.com/authorize?${params}` };
+    // URLSearchParams encodes space as '+', but Atlassian expects '%20' in query strings
+    const queryString = params.toString().replace(/\+/g, '%20');
+
+    this.logger.log(`Auth URL redirect_uri: ${redirectUri}`);
+    this.logger.log(`Auth URL scopes: ${scopes}`);
+    return { url: `https://auth.atlassian.com/authorize?${queryString}` };
   }
 
   async handleCallback(code: string, state: string): Promise<string> {
@@ -74,25 +83,39 @@ export class JiraService {
     if (!state || !this.verifyState(state)) {
       throw new BadRequestException('Invalid or expired state parameter.');
     }
+    if (!code) {
+      throw new BadRequestException('No authorization code received from Atlassian.');
+    }
 
-    this.logger.log('Exchanging authorization code for tokens...');
+    const redirectUri = `${this.appUrl}/api/integrations/jira/callback`;
+    this.logger.log(`Exchanging authorization code for tokens...`);
+    this.logger.log(`Token exchange redirect_uri: ${redirectUri}`);
+    this.logger.log(`Code received: length=${code.length}, value=${code}`);
 
-    // Exchange code for tokens
+    // Exchange code for tokens using JSON (per Atlassian OAuth 2.0 3LO docs)
+    const requestBody = {
+      grant_type: 'authorization_code',
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+      code,
+      redirect_uri: redirectUri,
+    };
+    this.logger.log(`Token request body (without secret): ${JSON.stringify({ ...requestBody, client_secret: '***' })}`);
+
     const tokenRes = await fetch('https://auth.atlassian.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code,
-        redirect_uri: `${this.appUrl}/api/integrations/jira/callback`,
-      }),
+      body: JSON.stringify(requestBody),
     });
     const tokenData = await tokenRes.json();
+    this.logger.log(`Token response status: ${tokenRes.status}`);
+
     if (tokenData.error) {
-      this.logger.error(`Token exchange failed: ${tokenData.error} - ${tokenData.error_description}`);
-      throw new BadRequestException(`Jira OAuth error: ${tokenData.error_description || tokenData.error}`);
+      this.logger.error(`Token exchange failed: ${JSON.stringify(tokenData)}`);
+      const hint = tokenData.error_description?.includes('authorization_code')
+        ? '. Ensure your Atlassian app has Jira API scopes configured in the Permissions tab'
+        : '';
+      throw new BadRequestException(`Jira OAuth error: ${tokenData.error_description || tokenData.error}${hint}`);
     }
 
     this.logger.log('Token exchange successful, fetching accessible resources...');
