@@ -30,6 +30,7 @@ const IntegrationsPage: React.FC = () => {
   const [githubStatus, setGithubStatus] = useState<IntegrationStatus>({ isActive: false, isOAuthConfigured: false });
   const [loading, setLoading] = useState(true);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadStatuses = useCallback(async () => {
     try {
@@ -52,14 +53,20 @@ const IntegrationsPage: React.FC = () => {
     loadStatuses();
   }, [loadStatuses]);
 
-  // Handle OAuth callback redirect (e.g. /integrations?connected=github)
+  // Handle OAuth callback redirect (e.g. /integrations?connected=github or /integrations?error=...)
   useEffect(() => {
     const connected = searchParams.get('connected');
+    const error = searchParams.get('error');
     if (connected) {
       setSuccessMessage(`Successfully connected to ${connected === 'jira' ? 'Jira' : 'GitHub'}!`);
       setSearchParams({}, { replace: true });
       loadStatuses();
-      setTimeout(() => setSuccessMessage(null), 5000);
+      setTimeout(() => setSuccessMessage(null), 8000);
+    }
+    if (error) {
+      setErrorMessage(`Connection failed: ${error}`);
+      setSearchParams({}, { replace: true });
+      setTimeout(() => setErrorMessage(null), 10000);
     }
   }, [searchParams, setSearchParams, loadStatuses]);
 
@@ -75,6 +82,13 @@ const IntegrationsPage: React.FC = () => {
       {successMessage && (
         <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm">
           ✓ {successMessage}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
+          <span>✕ {errorMessage}</span>
+          <button onClick={() => setErrorMessage(null)} className="text-red-400 hover:text-red-300 ml-2">✕</button>
         </div>
       )}
 

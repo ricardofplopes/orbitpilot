@@ -1,17 +1,36 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class GithubService {
-  private pendingStates = new Map<string, { expiresAt: number }>();
+  private readonly logger = new Logger(GithubService.name);
 
   constructor(private prisma: PrismaService) {}
 
   private get clientId() { return process.env.GITHUB_CLIENT_ID; }
   private get clientSecret() { return process.env.GITHUB_CLIENT_SECRET; }
   private get appUrl() { return process.env.APP_URL || 'http://localhost:3200'; }
+  private get jwtSecret() { return process.env.JWT_SECRET || ''; }
   private get isOAuthConfigured() { return !!(this.clientId && this.clientSecret); }
+
+  private createState(): string {
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const timestamp = Date.now().toString();
+    const payload = `${nonce}.${timestamp}`;
+    const signature = crypto.createHmac('sha256', this.jwtSecret).update(payload).digest('hex');
+    return `${payload}.${signature}`;
+  }
+
+  private verifyState(state: string): boolean {
+    const parts = state.split('.');
+    if (parts.length !== 3) return false;
+    const [nonce, timestamp, signature] = parts;
+    const expectedSig = crypto.createHmac('sha256', this.jwtSecret).update(`${nonce}.${timestamp}`).digest('hex');
+    if (signature !== expectedSig) return false;
+    const age = Date.now() - parseInt(timestamp, 10);
+    return age < 10 * 60 * 1000;
+  }
 
   async getConfig() {
     const config = await this.prisma.integrationConfig.findFirst({
@@ -34,12 +53,7 @@ export class GithubService {
     if (!this.isOAuthConfigured) {
       throw new BadRequestException('GitHub OAuth is not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables.');
     }
-    const state = crypto.randomBytes(20).toString('hex');
-    this.pendingStates.set(state, { expiresAt: Date.now() + 10 * 60 * 1000 });
-    // Cleanup expired states
-    for (const [k, v] of this.pendingStates) {
-      if (v.expiresAt < Date.now()) this.pendingStates.delete(k);
-    }
+    const state = this.createState();
     const params = new URLSearchParams({
       client_id: this.clientId!,
       redirect_uri: `${this.appUrl}/api/integrations/github/callback`,
@@ -53,12 +67,9 @@ export class GithubService {
     if (!this.isOAuthConfigured) {
       throw new BadRequestException('GitHub OAuth is not configured.');
     }
-    const pending = this.pendingStates.get(state);
-    if (!pending || pending.expiresAt < Date.now()) {
-      this.pendingStates.delete(state);
+    if (!state || !this.verifyState(state)) {
       throw new BadRequestException('Invalid or expired state parameter.');
     }
-    this.pendingStates.delete(state);
 
     // Exchange code for access token
     const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
