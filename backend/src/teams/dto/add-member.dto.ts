@@ -1,12 +1,13 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsUUID, IsEnum } from 'class-validator';
+import { TeamRole } from '../../common/enums';
 
 export class AddMemberDto {
-  @IsString()
+  @IsUUID()
   userId: string;
 
   @IsOptional()
-  @IsString()
-  role?: string;
+  @IsEnum(TeamRole)
+  role?: TeamRole;
 
   @IsOptional()
   @IsNumber()

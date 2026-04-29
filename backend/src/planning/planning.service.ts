@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateQuarterDto } from './dto/create-quarter.dto';
-import { CreateInitiativeDto } from './dto/create-initiative.dto';
+import { CreateQuarterDto, UpdateQuarterDto } from './dto/create-quarter.dto';
+import { CreateInitiativeDto, UpdateInitiativeDto } from './dto/create-initiative.dto';
 
 @Injectable()
 export class PlanningService {
@@ -44,7 +44,7 @@ export class PlanningService {
     return plan;
   }
 
-  async updateQuarterPlan(id: string, data: Partial<CreateQuarterDto & { status: string }>) {
+  async updateQuarterPlan(id: string, data: UpdateQuarterDto) {
     const plan = await this.prisma.quarterPlan.findUnique({ where: { id } });
     if (!plan) throw new NotFoundException('Quarter plan not found');
     return this.prisma.quarterPlan.update({
@@ -84,7 +84,7 @@ export class PlanningService {
     });
   }
 
-  async updateInitiative(id: string, data: Partial<CreateInitiativeDto & { status: string }>) {
+  async updateInitiative(id: string, data: UpdateInitiativeDto) {
     const initiative = await this.prisma.initiative.findUnique({ where: { id } });
     if (!initiative) throw new NotFoundException('Initiative not found');
     return this.prisma.initiative.update({

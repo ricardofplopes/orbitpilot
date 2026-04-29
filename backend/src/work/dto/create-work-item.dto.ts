@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsEnum, IsUUID } from 'class-validator';
+import { WorkItemStatus, Priority, WorkItemSource } from '../../common/enums';
 
 export class CreateWorkItemDto {
   @IsString()
@@ -9,16 +10,16 @@ export class CreateWorkItemDto {
   description?: string;
 
   @IsOptional()
-  @IsString()
-  source?: string;
+  @IsEnum(WorkItemSource)
+  source?: WorkItemSource;
 
   @IsOptional()
-  @IsString()
-  status?: string;
+  @IsEnum(WorkItemStatus)
+  status?: WorkItemStatus;
 
   @IsOptional()
-  @IsString()
-  priority?: string;
+  @IsEnum(Priority)
+  priority?: Priority;
 
   @IsOptional()
   @IsNumber()
@@ -29,11 +30,53 @@ export class CreateWorkItemDto {
   assignee?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   teamId?: string;
 
   @IsOptional()
+  @IsUUID()
+  initiativeId?: string;
+
+  @IsOptional()
   @IsString()
+  externalId?: string;
+}
+
+export class UpdateWorkItemDto {
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @IsOptional()
+  @IsEnum(WorkItemSource)
+  source?: WorkItemSource;
+
+  @IsOptional()
+  @IsEnum(WorkItemStatus)
+  status?: WorkItemStatus;
+
+  @IsOptional()
+  @IsEnum(Priority)
+  priority?: Priority;
+
+  @IsOptional()
+  @IsNumber()
+  storyPoints?: number;
+
+  @IsOptional()
+  @IsString()
+  assignee?: string;
+
+  @IsOptional()
+  @IsUUID()
+  teamId?: string;
+
+  @IsOptional()
+  @IsUUID()
   initiativeId?: string;
 
   @IsOptional()

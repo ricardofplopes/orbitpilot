@@ -2,7 +2,7 @@ import {
   Controller, Get, Post, Put, Delete, Param, Query, Body, UseGuards,
 } from '@nestjs/common';
 import { WorkService } from './work.service';
-import { CreateWorkItemDto } from './dto/create-work-item.dto';
+import { CreateWorkItemDto, UpdateWorkItemDto } from './dto/create-work-item.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('work')
@@ -36,7 +36,7 @@ export class WorkController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() dto: Partial<CreateWorkItemDto>) {
+  async update(@Param('id') id: string, @Body() dto: UpdateWorkItemDto) {
     return this.workService.update(id, dto);
   }
 

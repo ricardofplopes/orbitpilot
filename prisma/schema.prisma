@@ -67,6 +67,7 @@ model Availability {
   hours        Float      @default(0)
   teamMember   TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
 
+  @@index([teamMemberId, date])
   @@map("availability")
 }
 
@@ -80,6 +81,7 @@ model QuarterPlan {
   updatedAt   DateTime     @updatedAt @map("updated_at")
   initiatives Initiative[]
 
+  @@index([status])
   @@map("quarter_plans")
 }
 
@@ -96,6 +98,8 @@ model Initiative {
   team            Team?       @relation(fields: [teamId], references: [id])
   workItems       WorkItem[]
 
+  @@index([quarterPlanId])
+  @@index([teamId])
   @@map("initiatives")
 }
 
@@ -117,6 +121,9 @@ model WorkItem {
   team         Team?       @relation(fields: [teamId], references: [id])
   initiative   Initiative? @relation(fields: [initiativeId], references: [id])
 
+  @@index([teamId])
+  @@index([status])
+  @@index([initiativeId])
   @@map("work_items")
 }
 

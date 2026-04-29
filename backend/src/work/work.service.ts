@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateWorkItemDto } from './dto/create-work-item.dto';
+import { CreateWorkItemDto, UpdateWorkItemDto } from './dto/create-work-item.dto';
 
 @Injectable()
 export class WorkService {
@@ -61,7 +61,7 @@ export class WorkService {
     });
   }
 
-  async update(id: string, data: Partial<CreateWorkItemDto>) {
+  async update(id: string, data: UpdateWorkItemDto) {
     const item = await this.prisma.workItem.findUnique({ where: { id } });
     if (!item) throw new NotFoundException('Work item not found');
     return this.prisma.workItem.update({

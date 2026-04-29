@@ -2,8 +2,8 @@ import {
   Controller, Get, Post, Put, Delete, Param, Body, UseGuards,
 } from '@nestjs/common';
 import { PlanningService } from './planning.service';
-import { CreateQuarterDto } from './dto/create-quarter.dto';
-import { CreateInitiativeDto } from './dto/create-initiative.dto';
+import { CreateQuarterDto, UpdateQuarterDto } from './dto/create-quarter.dto';
+import { CreateInitiativeDto, UpdateInitiativeDto } from './dto/create-initiative.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('planning')
@@ -27,7 +27,7 @@ export class PlanningController {
   }
 
   @Put('quarters/:id')
-  async updateQuarter(@Param('id') id: string, @Body() dto: Partial<CreateQuarterDto>) {
+  async updateQuarter(@Param('id') id: string, @Body() dto: UpdateQuarterDto) {
     return this.planningService.updateQuarterPlan(id, dto);
   }
 
@@ -42,7 +42,7 @@ export class PlanningController {
   }
 
   @Put('initiatives/:id')
-  async updateInitiative(@Param('id') id: string, @Body() dto: Partial<CreateInitiativeDto>) {
+  async updateInitiative(@Param('id') id: string, @Body() dto: UpdateInitiativeDto) {
     return this.planningService.updateInitiative(id, dto);
   }
 

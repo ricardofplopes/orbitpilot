@@ -1,14 +1,15 @@
-import { IsString, IsNumber, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsUUID, IsNumber, IsEnum, IsDateString } from 'class-validator';
+import { AvailabilityType } from '../../common/enums';
 
 export class SetAvailabilityDto {
-  @IsString()
+  @IsUUID()
   teamMemberId: string;
 
   @IsDateString()
   date: string;
 
-  @IsString()
-  type: string;
+  @IsEnum(AvailabilityType)
+  type: AvailabilityType;
 
   @IsNumber()
   hours: number;
