@@ -1,4 +1,4 @@
-import { Controller, Get, Logger, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Logger, Post, Body, Query, Res, UseGuards, BadRequestException } from '@nestjs/common';
 import { Response } from 'express';
 import { GithubService } from './github.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -19,6 +19,15 @@ export class GithubController {
   @UseGuards(JwtAuthGuard)
   getAuthUrl() {
     return this.githubService.getAuthUrl();
+  }
+
+  @Post('connect-token')
+  @UseGuards(JwtAuthGuard)
+  async connectWithToken(@Body() body: { token: string }) {
+    if (!body.token) {
+      throw new BadRequestException('Token is required');
+    }
+    return this.githubService.connectWithToken(body.token);
   }
 
   // No auth guard — called by GitHub's OAuth redirect

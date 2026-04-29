@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { integrations } from '@/api/services';
-import IntegrationCard from '@/components/cards/IntegrationCard';
 import Spinner from '@/components/common/Spinner';
 import { CheckCircle, XCircle, ExternalLink, Unplug, Key, Loader2 } from 'lucide-react';
 
@@ -191,6 +190,153 @@ const JiraCard: React.FC<{
   );
 };
 
+const GithubCard: React.FC<{
+  status: IntegrationStatus;
+  onStatusChange: () => void;
+  onError: (msg: string) => void;
+  onSuccess: (msg: string) => void;
+}> = ({ status, onStatusChange, onError, onSuccess }) => {
+  const [mode, setMode] = useState<'choose' | 'token'>('choose');
+  const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState('');
+
+  const handleOAuth = async () => {
+    setLoading(true);
+    try {
+      const { url } = await integrations.getGithubAuthUrl();
+      window.location.href = url;
+    } catch (err: any) {
+      onError(err?.response?.data?.message || 'Failed to start OAuth flow');
+      setLoading(false);
+    }
+  };
+
+  const handleTokenConnect = async () => {
+    if (!token) return;
+    setLoading(true);
+    try {
+      const result = await integrations.connectGithubToken(token);
+      onSuccess(`Connected to GitHub as ${result.login}`);
+      onStatusChange();
+      setMode('choose');
+      setToken('');
+    } catch (err: any) {
+      onError(err?.response?.data?.message || 'Failed to connect with token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setLoading(true);
+    try {
+      await integrations.disconnectGithub();
+      onStatusChange();
+    } catch {
+      onError('Failed to disconnect');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (status.isActive) {
+    return (
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-orbit-navy flex items-center justify-center"><GithubIcon /></div>
+            <div>
+              <h3 className="font-semibold text-orbit-light">GitHub</h3>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs text-emerald-400">Connected ({status.authType === 'pat' ? 'Token' : 'OAuth'})</span>
+              </div>
+            </div>
+          </div>
+          {status.lastSyncAt && <span className="text-xs text-orbit-slate">Last sync: {new Date(status.lastSyncAt).toLocaleString()}</span>}
+        </div>
+        <div className="flex items-center gap-2 p-3 rounded-lg mb-4 bg-emerald-500/10 text-emerald-400 text-sm">
+          <CheckCircle className="w-4 h-4 flex-shrink-0" />
+          <span>Connected as <strong>{status.connectedAccount || 'GitHub User'}</strong></span>
+        </div>
+        <button onClick={handleDisconnect} disabled={loading} className="btn-secondary flex items-center gap-2">
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unplug className="w-4 h-4" />}
+          Disconnect
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-lg bg-orbit-navy flex items-center justify-center"><GithubIcon /></div>
+        <div>
+          <h3 className="font-semibold text-orbit-light">GitHub</h3>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <XCircle className="w-3.5 h-3.5 text-orbit-slate" />
+            <span className="text-xs text-orbit-slate">Not connected</span>
+          </div>
+        </div>
+      </div>
+      <p className="text-sm text-orbit-slate mb-5">Connect your GitHub account to sync repositories, pull requests, and code review data.</p>
+
+      {mode === 'choose' && (
+        <div className="space-y-3">
+          <button onClick={handleOAuth} disabled={loading || !status.isOAuthConfigured} className="btn-primary w-full flex items-center justify-center gap-2">
+            <ExternalLink className="w-4 h-4" />
+            Connect with OAuth
+          </button>
+          {!status.isOAuthConfigured && (
+            <p className="text-xs text-orbit-slate text-center">OAuth requires GITHUB_CLIENT_ID/SECRET env vars</p>
+          )}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-orbit-card" /></div>
+            <div className="relative flex justify-center text-xs"><span className="px-2 bg-orbit-card text-orbit-slate">or</span></div>
+          </div>
+          <button onClick={() => setMode('token')} className="btn-secondary w-full flex items-center justify-center gap-2">
+            <Key className="w-4 h-4" />
+            Connect with Personal Access Token
+          </button>
+        </div>
+      )}
+
+      {mode === 'token' && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-orbit-slate mb-1">Personal Access Token</label>
+            <input
+              className="input"
+              type="password"
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+            />
+            <p className="text-xs text-orbit-slate mt-1">
+              Create at{' '}
+              <a href="https://github.com/settings/tokens" target="_blank" rel="noopener noreferrer" className="text-orbit-blue hover:underline">
+                github.com → Settings → Developer settings → Personal access tokens
+              </a>
+            </p>
+            <p className="text-xs text-orbit-slate mt-0.5">Recommended scopes: <code className="text-orbit-light">repo</code>, <code className="text-orbit-light">read:org</code></p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleTokenConnect}
+              disabled={loading || !token}
+              className="btn-primary flex-1 flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+              Connect
+            </button>
+            <button onClick={() => setMode('choose')} className="btn-secondary">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const IntegrationsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [jiraStatus, setJiraStatus] = useState<IntegrationStatus>({ isActive: false, isOAuthConfigured: false });
@@ -277,22 +423,11 @@ const IntegrationsPage: React.FC = () => {
           onSuccess={(msg) => { setSuccessMessage(msg); setTimeout(() => setSuccessMessage(null), 8000); }}
         />
 
-        <IntegrationCard
-          title="GitHub"
-          description="Connect your GitHub account to sync repositories, pull requests, and code review data."
-          icon={<GithubIcon />}
-          isConnected={githubStatus.isActive}
-          isOAuthConfigured={githubStatus.isOAuthConfigured}
-          connectedAccount={githubStatus.connectedAccount}
-          lastSyncAt={githubStatus.lastSyncAt}
-          onConnect={async () => {
-            const { url } = await integrations.getGithubAuthUrl();
-            window.location.href = url;
-          }}
-          onDisconnect={async () => {
-            await integrations.disconnectGithub();
-            setGithubStatus({ ...githubStatus, isActive: false, connectedAccount: null });
-          }}
+        <GithubCard
+          status={githubStatus}
+          onStatusChange={loadStatuses}
+          onError={(msg) => { setErrorMessage(msg); setTimeout(() => setErrorMessage(null), 10000); }}
+          onSuccess={(msg) => { setSuccessMessage(msg); setTimeout(() => setSuccessMessage(null), 8000); }}
         />
       </div>
     </div>

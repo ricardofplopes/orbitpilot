@@ -43,6 +43,7 @@ export class GithubService {
       type: config.type,
       isActive: config.isActive,
       isOAuthConfigured: this.isOAuthConfigured,
+      authType: cfg?.authType || 'oauth',
       lastSyncAt: config.lastSyncAt,
       connectedAccount: cfg?.login || cfg?.org || null,
       avatarUrl: cfg?.avatarUrl || null,
@@ -114,6 +115,45 @@ export class GithubService {
     }
 
     return `${this.appUrl}/integrations?connected=github`;
+  }
+
+  async connectWithToken(token: string): Promise<{ success: boolean; login: string }> {
+    // Validate the token by calling GitHub API
+    const res = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+      },
+    });
+
+    if (!res.ok) {
+      throw new BadRequestException('Invalid GitHub token. Check your personal access token.');
+    }
+
+    const userData = await res.json();
+
+    const configData = {
+      accessToken: token,
+      tokenType: 'bearer',
+      authType: 'pat',
+      scope: 'manual',
+      login: userData.login,
+      avatarUrl: userData.avatar_url,
+    };
+
+    const existing = await this.prisma.integrationConfig.findFirst({ where: { type: 'github' } });
+    if (existing) {
+      await this.prisma.integrationConfig.update({
+        where: { id: existing.id },
+        data: { config: configData as any, isActive: true, lastSyncAt: new Date() },
+      });
+    } else {
+      await this.prisma.integrationConfig.create({
+        data: { type: 'github', config: configData as any, isActive: true, lastSyncAt: new Date() },
+      });
+    }
+
+    return { success: true, login: userData.login };
   }
 
   async disconnect() {

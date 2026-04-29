@@ -164,6 +164,10 @@ export const integrations = {
     const { data } = await client.get<{ url: string }>('/integrations/github/auth-url');
     return data;
   },
+  connectGithubToken: async (token: string) => {
+    const { data } = await client.post<{ success: boolean; login: string }>('/integrations/github/connect-token', { token });
+    return data;
+  },
   disconnectGithub: async () => {
     const { data } = await client.post('/integrations/github/disconnect');
     return data;
