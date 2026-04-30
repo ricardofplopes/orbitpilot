@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { integrations } from '@/api/services';
+import { useTeam } from '@/context/TeamContext';
 import Spinner from '@/components/common/Spinner';
 import { CheckCircle, XCircle, ExternalLink, Unplug, Key, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
 
@@ -34,6 +35,7 @@ const JiraProjectSync: React.FC<{
   onSuccess: (msg: string) => void;
   onStatusChange: () => void;
 }> = ({ currentProject, onError, onSuccess, onStatusChange }) => {
+  const { refreshTeams } = useTeam();
   const [projects, setProjects] = useState<Array<{ key: string; name: string }>>([]);
   const [selectedProject, setSelectedProject] = useState(currentProject || '');
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -70,6 +72,7 @@ const JiraProjectSync: React.FC<{
       setSyncResult(result);
       onSuccess(`Synced ${result.synced} issues from Jira${result.errors > 0 ? ` (${result.errors} errors)` : ''}`);
       onStatusChange();
+      await refreshTeams();
     } catch (err: any) {
       onError(err?.response?.data?.message || 'Sync failed');
     } finally {
