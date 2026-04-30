@@ -147,6 +147,22 @@ model IntegrationConfig {
   @@map("integration_configs")
 }
 
+model Release {
+  id          String    @id @default(uuid())
+  name        String
+  status      String    @default("unreleased")
+  startDate   DateTime? @map("start_date")
+  releaseDate DateTime? @map("release_date")
+  description String?
+  projectKey  String    @map("project_key")
+  externalId  String?   @map("external_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([projectKey, name], name: "projectKey_name")
+  @@map("releases")
+}
+
 model Insight {
   id        String   @id @default(uuid())
   type      String

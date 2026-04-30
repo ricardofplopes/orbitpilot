@@ -110,40 +110,82 @@ export class WorkService {
     return { todo, in_progress, in_review, done, total };
   }
 
-  async getReleases(teamId?: string) {
-    const where: any = { fixVersion: { not: null } };
+  async getReleases(teamId?: string, statusFilter?: string) {
+    // Get releases from the Release model
+    const where: any = {};
+    if (statusFilter) {
+      const statuses = statusFilter.split(',').filter(Boolean);
+      if (statuses.length > 0) where.status = { in: statuses };
+    } else {
+      where.status = 'unreleased'; // default: show unreleased
+    }
+
+    const releases = await this.prisma.release.findMany({
+      where,
+      orderBy: [{ releaseDate: 'desc' }, { startDate: 'desc' }, { name: 'desc' }],
+    });
+
+    // For each release, compute progress from work items with matching fixVersion
+    const teamFilter: any = teamId ? { teamId } : {};
+
+    const results = await Promise.all(releases.map(async (release) => {
+      const items = await this.prisma.workItem.findMany({
+        where: { fixVersion: release.name, ...teamFilter },
+        select: { status: true, storyPoints: true },
+      });
+
+      const total = items.length;
+      const done = items.filter(i => i.status === 'done').length;
+      const inProgress = items.filter(i => i.status === 'in_progress' || i.status === 'in_review').length;
+      const todo = total - done - inProgress;
+      const sp = items.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+
+      return {
+        id: release.id,
+        version: release.name,
+        status: release.status,
+        startDate: release.startDate,
+        releaseDate: release.releaseDate,
+        description: release.description,
+        totalItems: total,
+        doneItems: done,
+        inProgressItems: inProgress,
+        todoItems: todo,
+        progress: total > 0 ? Math.round((done / total) * 100) : 0,
+        storyPoints: sp,
+      };
+    }));
+
+    return results;
+  }
+
+  async getReleaseDetails(releaseId: string, teamId?: string) {
+    const release = await this.prisma.release.findUnique({ where: { id: releaseId } });
+    if (!release) throw new NotFoundException('Release not found');
+
+    const where: any = { fixVersion: release.name };
     if (teamId) where.teamId = teamId;
 
     const items = await this.prisma.workItem.findMany({
       where,
-      select: { fixVersion: true, status: true, storyPoints: true },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        id: true,
+        externalId: true,
+        title: true,
+        status: true,
+        priority: true,
+        assignee: true,
+        storyPoints: true,
+        type: true,
+        sprint: true,
+        externalUrl: true,
+      },
     });
 
-    // Group by fixVersion
-    const versionMap = new Map<string, { total: number; done: number; inProgress: number; todo: number; sp: number }>();
-    for (const item of items) {
-      const v = item.fixVersion!;
-      if (!versionMap.has(v)) {
-        versionMap.set(v, { total: 0, done: 0, inProgress: 0, todo: 0, sp: 0 });
-      }
-      const entry = versionMap.get(v)!;
-      entry.total++;
-      entry.sp += item.storyPoints || 0;
-      if (item.status === 'done') entry.done++;
-      else if (item.status === 'in_progress' || item.status === 'in_review') entry.inProgress++;
-      else entry.todo++;
-    }
-
-    return Array.from(versionMap.entries())
-      .map(([version, data]) => ({
-        version,
-        totalItems: data.total,
-        doneItems: data.done,
-        inProgressItems: data.inProgress,
-        todoItems: data.todo,
-        progress: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
-        storyPoints: data.sp,
-      }))
-      .sort((a, b) => b.totalItems - a.totalItems);
+    return {
+      ...release,
+      items,
+    };
   }
 }

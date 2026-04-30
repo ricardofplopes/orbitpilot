@@ -317,12 +317,13 @@ export class JiraService {
     const projectKey = auth.config.projectKey;
     const cfg = auth.config;
 
-    // Build JQL: use custom syncJql if set, otherwise default with 6-month limit
+    // Build JQL: use custom syncJql if set, otherwise default with board sprint scoping
     let jql: string;
     if (cfg.syncJql) {
       jql = cfg.syncJql;
     } else if (projectKey) {
-      jql = `project = "${projectKey}" AND updated >= -26w ORDER BY updated DESC`;
+      // Scope to sprint-associated issues only (board items) + recent updates
+      jql = `project = "${projectKey}" AND sprint is not EMPTY AND updated >= -26w ORDER BY updated DESC`;
     } else {
       jql = 'updated >= -26w ORDER BY updated DESC';
     }
@@ -444,9 +445,50 @@ export class JiraService {
     if (projectKey) {
       await this.linkSyncedItemsToTeam(projectKey);
       await this.syncTeamMembersFromAssignees(projectKey);
+      await this.syncReleases(projectKey, auth);
     }
 
     return { synced, errors };
+  }
+
+  /** Sync releases (versions) from Jira project */
+  private async syncReleases(projectKey: string, auth: { headers: Record<string, string>; baseUrl: string; config: any }) {
+    try {
+      const url = `${auth.baseUrl}/rest/api/3/project/${projectKey}/versions`;
+      const res = await fetch(url, { headers: auth.headers });
+      if (!res.ok) {
+        this.logger.warn(`Failed to fetch versions: ${res.status}`);
+        return;
+      }
+      const versions = await res.json();
+      this.logger.log(`Fetched ${versions.length} versions from Jira project ${projectKey}`);
+
+      for (const v of versions) {
+        const status = v.released ? 'released' : v.archived ? 'archived' : 'unreleased';
+        await this.prisma.release.upsert({
+          where: { projectKey_name: { projectKey, name: v.name } },
+          update: {
+            status,
+            startDate: v.startDate ? new Date(v.startDate) : null,
+            releaseDate: v.releaseDate ? new Date(v.releaseDate) : null,
+            description: v.description || null,
+            externalId: v.id?.toString() || null,
+          },
+          create: {
+            name: v.name,
+            projectKey,
+            status,
+            startDate: v.startDate ? new Date(v.startDate) : null,
+            releaseDate: v.releaseDate ? new Date(v.releaseDate) : null,
+            description: v.description || null,
+            externalId: v.id?.toString() || null,
+          },
+        });
+      }
+      this.logger.log(`Synced ${versions.length} releases for ${projectKey}`);
+    } catch (err: any) {
+      this.logger.warn(`Failed to sync releases: ${err.message}`);
+    }
   }
 
   /** Sync team members by creating User + TeamMember records from Jira assignees */

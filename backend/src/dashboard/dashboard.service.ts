@@ -81,8 +81,8 @@ export class DashboardService {
         storyPoints: s._sum.storyPoints || 0,
         itemCount: s._count,
       }))
-      .sort((a, b) => a.sprint.localeCompare(b.sprint))
-      .slice(-10);
+      .sort((a, b) => b.sprint.localeCompare(a.sprint))
+      .slice(0, 10);
 
     // Filter memberWorkload to only show active team members
     let activeNames: string[] | null = null;
@@ -141,6 +141,6 @@ export class DashboardService {
     return sprintData
       .filter(s => s.sprint)
       .map(s => ({ name: s.sprint!, itemCount: s._count }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => b.name.localeCompare(a.name));
   }
 }
