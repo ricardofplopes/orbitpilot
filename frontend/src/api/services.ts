@@ -156,6 +156,34 @@ export const integrations = {
     const { data } = await client.post('/integrations/jira/disconnect');
     return data;
   },
+  getJiraProjects: async () => {
+    const { data } = await client.get<Array<{ key: string; name: string; id: string }>>('/integrations/jira/projects');
+    return data;
+  },
+  setJiraProject: async (projectKey: string) => {
+    const { data } = await client.post('/integrations/jira/set-project', { projectKey });
+    return data;
+  },
+  syncJira: async () => {
+    const { data } = await client.post<{ synced: number; errors: number }>('/integrations/jira/sync');
+    return data;
+  },
+  getJiraIssues: async (filters?: { assignee?: string; status?: string; sprint?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.assignee) params.set('assignee', filters.assignee);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.sprint) params.set('sprint', filters.sprint);
+    const { data } = await client.get(`/integrations/jira/issues?${params.toString()}`);
+    return data;
+  },
+  getJiraIssuesByAssignee: async () => {
+    const { data } = await client.get('/integrations/jira/issues-by-assignee');
+    return data;
+  },
+  getJiraEpics: async () => {
+    const { data } = await client.get('/integrations/jira/epics');
+    return data;
+  },
   getGithubConfig: async () => {
     const { data } = await client.get('/integrations/github/config');
     return data;

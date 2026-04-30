@@ -104,25 +104,31 @@ model Initiative {
 }
 
 model WorkItem {
-  id           String      @id @default(uuid())
-  externalId   String?     @map("external_id")
-  source       String      @default("manual")
-  title        String
-  description  String?
-  status       String      @default("todo")
-  priority     String?
-  storyPoints  Float?      @map("story_points")
-  assignee     String?
-  teamId       String?     @map("team_id")
-  initiativeId String?     @map("initiative_id")
-  cycleTime    Float?      @map("cycle_time")
-  createdAt    DateTime    @default(now()) @map("created_at")
-  updatedAt    DateTime    @updatedAt @map("updated_at")
-  team         Team?       @relation(fields: [teamId], references: [id])
-  initiative   Initiative? @relation(fields: [initiativeId], references: [id])
+  id            String      @id @default(uuid())
+  externalId    String?     @map("external_id")
+  externalUrl   String?     @map("external_url")
+  source        String      @default("manual")
+  title         String
+  description   String?
+  status        String      @default("todo")
+  priority      String?
+  type          String?
+  storyPoints   Float?      @map("story_points")
+  assignee      String?
+  assigneeEmail String?     @map("assignee_email")
+  sprint        String?
+  teamId        String?     @map("team_id")
+  initiativeId  String?     @map("initiative_id")
+  cycleTime     Float?      @map("cycle_time")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  team          Team?       @relation(fields: [teamId], references: [id])
+  initiative    Initiative? @relation(fields: [initiativeId], references: [id])
 
   @@index([teamId])
   @@index([status])
+  @@index([assignee])
+  @@index([source, externalId])
   @@index([initiativeId])
   @@map("work_items")
 }

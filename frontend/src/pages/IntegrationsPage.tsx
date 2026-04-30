@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { integrations } from '@/api/services';
 import Spinner from '@/components/common/Spinner';
-import { CheckCircle, XCircle, ExternalLink, Unplug, Key, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, ExternalLink, Unplug, Key, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
 
 const JiraIcon = () => (
   <svg viewBox="0 0 24 24" className="w-6 h-6" fill="#2563EB">
@@ -23,8 +23,97 @@ interface IntegrationStatus {
   connectedAccount?: string | null;
   connectedSite?: string | null;
   connectedUser?: string | null;
+  projectKey?: string | null;
   lastSyncAt?: string;
 }
+
+/** Sub-component for project selection and sync within connected Jira card */
+const JiraProjectSync: React.FC<{
+  currentProject: string | null;
+  onError: (msg: string) => void;
+  onSuccess: (msg: string) => void;
+  onStatusChange: () => void;
+}> = ({ currentProject, onError, onSuccess, onStatusChange }) => {
+  const [projects, setProjects] = useState<Array<{ key: string; name: string }>>([]);
+  const [selectedProject, setSelectedProject] = useState(currentProject || '');
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ synced: number; errors: number } | null>(null);
+
+  useEffect(() => {
+    setLoadingProjects(true);
+    integrations.getJiraProjects()
+      .then(setProjects)
+      .catch(() => {})
+      .finally(() => setLoadingProjects(false));
+  }, []);
+
+  useEffect(() => {
+    if (currentProject) setSelectedProject(currentProject);
+  }, [currentProject]);
+
+  const handleSetProject = async (key: string) => {
+    setSelectedProject(key);
+    try {
+      await integrations.setJiraProject(key);
+      onStatusChange();
+    } catch (err: any) {
+      onError(err?.response?.data?.message || 'Failed to set project');
+    }
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await integrations.syncJira();
+      setSyncResult(result);
+      onSuccess(`Synced ${result.synced} issues from Jira${result.errors > 0 ? ` (${result.errors} errors)` : ''}`);
+      onStatusChange();
+    } catch (err: any) {
+      onError(err?.response?.data?.message || 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-orbit-slate mb-1.5">
+          <FolderOpen className="w-3.5 h-3.5 inline mr-1" />
+          Jira Project
+        </label>
+        {loadingProjects ? (
+          <div className="flex items-center gap-2 text-xs text-orbit-slate"><Loader2 className="w-3 h-3 animate-spin" /> Loading projects...</div>
+        ) : (
+          <select
+            className="input"
+            value={selectedProject}
+            onChange={(e) => handleSetProject(e.target.value)}
+          >
+            <option value="">All projects</option>
+            {projects.map(p => (
+              <option key={p.key} value={p.key}>{p.key} — {p.name}</option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button onClick={handleSync} disabled={syncing} className="btn-primary flex items-center gap-2">
+          {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          {syncing ? 'Syncing...' : 'Sync Issues'}
+        </button>
+        {syncResult && (
+          <span className="text-xs text-orbit-slate">
+            {syncResult.synced} issues synced{syncResult.errors > 0 && `, ${syncResult.errors} errors`}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const JiraCard: React.FC<{
   status: IntegrationStatus;
@@ -95,10 +184,20 @@ const JiraCard: React.FC<{
           <CheckCircle className="w-4 h-4 flex-shrink-0" />
           <span>Connected to <strong>{status.connectedSite || 'Jira'}</strong>{status.connectedUser ? ` as ${status.connectedUser}` : ''}</span>
         </div>
-        <button onClick={handleDisconnect} disabled={loading} className="btn-secondary flex items-center gap-2">
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unplug className="w-4 h-4" />}
-          Disconnect
-        </button>
+
+        <JiraProjectSync
+          currentProject={status.projectKey || null}
+          onError={onError}
+          onSuccess={onSuccess}
+          onStatusChange={onStatusChange}
+        />
+
+        <div className="mt-4 pt-4 border-t border-orbit-card">
+          <button onClick={handleDisconnect} disabled={loading} className="btn-secondary flex items-center gap-2">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unplug className="w-4 h-4" />}
+            Disconnect
+          </button>
+        </div>
       </div>
     );
   }

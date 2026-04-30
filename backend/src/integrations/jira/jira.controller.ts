@@ -58,9 +58,43 @@ export class JiraController {
     return this.jiraService.disconnect();
   }
 
+  @Get('projects')
+  @UseGuards(JwtAuthGuard)
+  async getProjects() {
+    return this.jiraService.getProjects();
+  }
+
+  @Post('set-project')
+  @UseGuards(JwtAuthGuard)
+  async setProject(@Body() body: { projectKey: string }) {
+    return this.jiraService.setProject(body.projectKey);
+  }
+
+  @Post('sync')
+  @UseGuards(JwtAuthGuard)
+  async sync() {
+    return this.jiraService.syncIssues();
+  }
+
   @Get('issues')
   @UseGuards(JwtAuthGuard)
-  async getIssues() {
-    return this.jiraService.getIssues();
+  async getIssues(
+    @Query('assignee') assignee?: string,
+    @Query('status') status?: string,
+    @Query('sprint') sprint?: string,
+  ) {
+    return this.jiraService.getIssues({ assignee, status, sprint });
+  }
+
+  @Get('issues-by-assignee')
+  @UseGuards(JwtAuthGuard)
+  async getIssuesByAssignee() {
+    return this.jiraService.getIssuesByAssignee();
+  }
+
+  @Get('epics')
+  @UseGuards(JwtAuthGuard)
+  async getEpics() {
+    return this.jiraService.getEpics();
   }
 }

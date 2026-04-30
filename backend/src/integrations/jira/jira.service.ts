@@ -49,6 +49,7 @@ export class JiraService {
       lastSyncAt: config.lastSyncAt,
       connectedSite: cfg?.siteName || cfg?.cloudId || null,
       connectedUser: cfg?.connectedUser || null,
+      projectKey: cfg?.projectKey || null,
     };
   }
 
@@ -220,77 +221,277 @@ export class JiraService {
     return { success: true };
   }
 
-  async getIssues() {
-    // Mock Jira issues for development
-    return [
-      {
-        key: 'PROJ-101',
-        summary: 'Implement checkout flow redesign',
-        status: 'In Progress',
-        priority: 'High',
-        assignee: 'Alice Chen',
-        storyPoints: 8,
-        type: 'Story',
-        sprint: 'Sprint 23',
-      },
-      {
-        key: 'PROJ-102',
-        summary: 'Fix payment processing timeout',
-        status: 'To Do',
-        priority: 'Critical',
-        assignee: 'Bob Smith',
-        storyPoints: 5,
-        type: 'Bug',
-        sprint: 'Sprint 23',
-      },
-      {
-        key: 'PROJ-103',
-        summary: 'Add unit tests for payment service',
-        status: 'Done',
-        priority: 'Medium',
-        assignee: 'Carol Davis',
-        storyPoints: 3,
-        type: 'Task',
-        sprint: 'Sprint 22',
-      },
-      {
-        key: 'PROJ-104',
-        summary: 'Database migration for user profiles',
-        status: 'In Review',
-        priority: 'High',
-        assignee: 'David Park',
-        storyPoints: 5,
-        type: 'Story',
-        sprint: 'Sprint 23',
-      },
-      {
-        key: 'PROJ-105',
-        summary: 'API rate limiting implementation',
-        status: 'In Progress',
-        priority: 'Medium',
-        assignee: 'Eva Martinez',
-        storyPoints: 8,
-        type: 'Story',
-        sprint: 'Sprint 23',
-      },
-      {
-        key: 'PROJ-106',
-        summary: 'Mobile push notification service',
-        status: 'To Do',
-        priority: 'Low',
-        assignee: null,
-        storyPoints: 13,
-        type: 'Epic',
-        sprint: 'Sprint 24',
-      },
-    ];
+  /** Build auth headers for Jira API calls based on stored config */
+  private async getAuthHeaders(): Promise<{ headers: Record<string, string>; baseUrl: string; config: any } | null> {
+    const config = await this.prisma.integrationConfig.findFirst({
+      where: { type: 'jira', isActive: true },
+    });
+    if (!config) return null;
+
+    const cfg = config.config as any;
+
+    if (cfg.authType === 'api-token' && cfg.baseUrl && cfg.email && cfg.apiToken) {
+      const auth = Buffer.from(`${cfg.email}:${cfg.apiToken}`).toString('base64');
+      return {
+        baseUrl: cfg.baseUrl,
+        headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
+        config: cfg,
+      };
+    }
+
+    if (cfg.accessToken) {
+      const baseUrl = cfg.baseUrl || `https://api.atlassian.com/ex/jira/${cfg.cloudId}`;
+      return {
+        baseUrl,
+        headers: { Authorization: `Bearer ${cfg.accessToken}`, Accept: 'application/json' },
+        config: cfg,
+      };
+    }
+
+    return null;
+  }
+
+  /** Get available Jira projects for configuration */
+  async getProjects() {
+    const auth = await this.getAuthHeaders();
+    if (!auth) return [];
+
+    try {
+      const res = await fetch(`${auth.baseUrl}/rest/api/3/project/search?maxResults=50`, { headers: auth.headers });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.values || []).map((p: any) => ({
+        key: p.key,
+        name: p.name,
+        id: p.id,
+        avatarUrl: p.avatarUrls?.['24x24'] || null,
+      }));
+    } catch (err: any) {
+      this.logger.error(`Failed to fetch Jira projects: ${err.message}`);
+      return [];
+    }
+  }
+
+  /** Save the selected project key to sync */
+  async setProject(projectKey: string) {
+    const existing = await this.prisma.integrationConfig.findFirst({ where: { type: 'jira' } });
+    if (!existing) throw new BadRequestException('Jira is not connected');
+    const cfg = existing.config as any;
+    cfg.projectKey = projectKey;
+    await this.prisma.integrationConfig.update({
+      where: { id: existing.id },
+      data: { config: cfg as any },
+    });
+    return { success: true, projectKey };
+  }
+
+  /** Sync issues from Jira into local WorkItem table */
+  async syncIssues(): Promise<{ synced: number; errors: number }> {
+    const auth = await this.getAuthHeaders();
+    if (!auth) throw new BadRequestException('Jira is not connected');
+
+    const projectKey = auth.config.projectKey;
+    const jql = projectKey
+      ? `project = "${projectKey}" ORDER BY updated DESC`
+      : 'ORDER BY updated DESC';
+
+    let nextPageToken: string | null = null;
+    const maxResults = 100;
+    let synced = 0;
+    let errors = 0;
+
+    this.logger.log(`Starting Jira sync. JQL: ${jql}`);
+
+    do {
+      const fields = 'summary,status,priority,assignee,issuetype,customfield_10016,sprint,created,updated';
+      const params = new URLSearchParams({ jql, fields, maxResults: maxResults.toString() });
+      if (nextPageToken) params.set('nextPageToken', nextPageToken);
+
+      const url = `${auth.baseUrl}/rest/api/3/search/jql?${params.toString()}`;
+
+      const response = await fetch(url, { headers: auth.headers });
+      if (!response.ok) {
+        const errText = await response.text();
+        this.logger.error(`Jira sync failed: ${response.status} - ${errText}`);
+        throw new BadRequestException(`Jira API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const issues = data.issues || [];
+      nextPageToken = data.nextPageToken || null;
+
+      for (const issue of issues) {
+        try {
+          const assigneeName = issue.fields?.assignee?.displayName || null;
+          const assigneeEmail = issue.fields?.assignee?.emailAddress || null;
+          const baseUrl = auth.baseUrl.replace('/rest/api/3', '').replace(/\/+$/, '');
+          const browseUrl = `${auth.config.baseUrl || baseUrl}/browse/${issue.key}`;
+
+          const itemData = {
+            title: issue.fields?.summary || issue.key,
+            status: this.mapJiraStatus(issue.fields?.status?.name),
+            priority: this.mapJiraPriority(issue.fields?.priority?.name),
+            type: issue.fields?.issuetype?.name || null,
+            assignee: assigneeName,
+            assigneeEmail: assigneeEmail,
+            storyPoints: issue.fields?.customfield_10016 || null,
+            sprint: issue.fields?.sprint?.name || null,
+            externalUrl: browseUrl,
+          };
+
+          const existing = await this.prisma.workItem.findFirst({
+            where: { source: 'jira', externalId: issue.key },
+          });
+
+          if (existing) {
+            await this.prisma.workItem.update({ where: { id: existing.id }, data: itemData });
+          } else {
+            await this.prisma.workItem.create({
+              data: { ...itemData, source: 'jira', externalId: issue.key },
+            });
+          }
+          synced++;
+        } catch (err: any) {
+          this.logger.warn(`Failed to upsert issue ${issue.key}: ${err.message}`);
+          errors++;
+        }
+      }
+    } while (nextPageToken);
+
+    // Update lastSyncAt
+    const existing = await this.prisma.integrationConfig.findFirst({ where: { type: 'jira' } });
+    if (existing) {
+      await this.prisma.integrationConfig.update({
+        where: { id: existing.id },
+        data: { lastSyncAt: new Date() },
+      });
+    }
+
+    this.logger.log(`Jira sync complete: ${synced} synced, ${errors} errors`);
+    return { synced, errors };
+  }
+
+  /** Get issues from local DB (synced from Jira or manually created) */
+  async getIssues(filters?: { assignee?: string; status?: string; sprint?: string }) {
+    const where: any = { source: 'jira' };
+    if (filters?.assignee) where.assignee = { contains: filters.assignee, mode: 'insensitive' };
+    if (filters?.status) where.status = filters.status;
+    if (filters?.sprint) where.sprint = { contains: filters.sprint, mode: 'insensitive' };
+
+    const items = await this.prisma.workItem.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+    });
+
+    // If no synced items exist, return mock data
+    if (items.length === 0) return this.getMockIssues();
+
+    return items.map(item => ({
+      key: item.externalId || item.id,
+      summary: item.title,
+      status: item.status,
+      priority: item.priority,
+      assignee: item.assignee,
+      assigneeEmail: (item as any).assigneeEmail,
+      storyPoints: item.storyPoints,
+      type: (item as any).type || 'Task',
+      sprint: (item as any).sprint,
+      externalUrl: (item as any).externalUrl,
+    }));
+  }
+
+  /** Get issues grouped by assignee */
+  async getIssuesByAssignee() {
+    const items = await this.prisma.workItem.findMany({
+      where: { source: 'jira', assignee: { not: null } },
+      orderBy: { assignee: 'asc' },
+    });
+
+    if (items.length === 0) return this.getMockIssuesByAssignee();
+
+    const grouped: Record<string, any[]> = {};
+    for (const item of items) {
+      const name = item.assignee || 'Unassigned';
+      if (!grouped[name]) grouped[name] = [];
+      grouped[name].push({
+        key: item.externalId || item.id,
+        summary: item.title,
+        status: item.status,
+        priority: item.priority,
+        storyPoints: item.storyPoints,
+        type: (item as any).type,
+        sprint: (item as any).sprint,
+        externalUrl: (item as any).externalUrl,
+      });
+    }
+    return grouped;
   }
 
   async getEpics() {
+    const items = await this.prisma.workItem.findMany({
+      where: { source: 'jira', type: 'Epic' },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (items.length === 0) return this.getMockEpics();
+
+    return items.map(item => ({
+      key: item.externalId || item.id,
+      summary: item.title,
+      status: item.status,
+      issueCount: null,
+    }));
+  }
+
+  private mapJiraStatus(jiraStatus: string | null): string {
+    if (!jiraStatus) return 'todo';
+    const lower = jiraStatus.toLowerCase();
+    if (lower.includes('done') || lower.includes('closed') || lower.includes('resolved')) return 'done';
+    if (lower.includes('progress') || lower.includes('active')) return 'in_progress';
+    if (lower.includes('review') || lower.includes('testing')) return 'in_review';
+    return 'todo';
+  }
+
+  private mapJiraPriority(jiraPriority: string | null): string {
+    if (!jiraPriority) return 'P3';
+    const lower = jiraPriority.toLowerCase();
+    if (lower.includes('highest') || lower.includes('critical') || lower.includes('blocker')) return 'P1';
+    if (lower.includes('high')) return 'P1';
+    if (lower.includes('medium')) return 'P2';
+    return 'P3';
+  }
+
+  private getMockIssues() {
     return [
-      { key: 'PROJ-50', summary: 'Checkout Flow Redesign', status: 'In Progress', issueCount: 12 },
-      { key: 'PROJ-51', summary: 'Payment Gateway Migration', status: 'To Do', issueCount: 8 },
-      { key: 'PROJ-52', summary: 'Mobile App V2', status: 'In Progress', issueCount: 15 },
+      { key: 'PROJ-101', summary: 'Implement checkout flow redesign', status: 'in_progress', priority: 'P1', assignee: 'Alice Chen', storyPoints: 8, type: 'Story', sprint: 'Sprint 23' },
+      { key: 'PROJ-102', summary: 'Fix payment processing timeout', status: 'todo', priority: 'P1', assignee: 'Bob Smith', storyPoints: 5, type: 'Bug', sprint: 'Sprint 23' },
+      { key: 'PROJ-103', summary: 'Add unit tests for payment service', status: 'done', priority: 'P2', assignee: 'Carol Davis', storyPoints: 3, type: 'Task', sprint: 'Sprint 22' },
+      { key: 'PROJ-104', summary: 'Database migration for user profiles', status: 'in_review', priority: 'P1', assignee: 'David Park', storyPoints: 5, type: 'Story', sprint: 'Sprint 23' },
+      { key: 'PROJ-105', summary: 'API rate limiting implementation', status: 'in_progress', priority: 'P2', assignee: 'Eva Martinez', storyPoints: 8, type: 'Story', sprint: 'Sprint 23' },
+      { key: 'PROJ-106', summary: 'Mobile push notification service', status: 'todo', priority: 'P3', assignee: null, storyPoints: 13, type: 'Epic', sprint: 'Sprint 24' },
     ];
+  }
+
+  private getMockEpics() {
+    return [
+      { key: 'PROJ-50', summary: 'Checkout Flow Redesign', status: 'in_progress', issueCount: 12 },
+      { key: 'PROJ-51', summary: 'Payment Gateway Migration', status: 'todo', issueCount: 8 },
+      { key: 'PROJ-52', summary: 'Mobile App V2', status: 'in_progress', issueCount: 15 },
+    ];
+  }
+
+  private getMockIssuesByAssignee() {
+    return {
+      'Alice Chen': [
+        { key: 'PROJ-101', summary: 'Implement checkout flow redesign', status: 'in_progress', priority: 'P1', storyPoints: 8, type: 'Story', sprint: 'Sprint 23' },
+      ],
+      'Bob Smith': [
+        { key: 'PROJ-102', summary: 'Fix payment processing timeout', status: 'todo', priority: 'P1', storyPoints: 5, type: 'Bug', sprint: 'Sprint 23' },
+      ],
+      'Carol Davis': [
+        { key: 'PROJ-103', summary: 'Add unit tests for payment service', status: 'done', priority: 'P2', storyPoints: 3, type: 'Task', sprint: 'Sprint 22' },
+      ],
+    };
   }
 }
