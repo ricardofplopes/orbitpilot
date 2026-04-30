@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { teams as teamsApi } from '@/api/services';
+import { useAuth } from '@/context/AuthContext';
 
 interface Team {
   id: string;
@@ -53,9 +54,16 @@ export const TeamProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const { isAuthenticated } = useAuth();
+
   useEffect(() => {
-    refreshTeams();
-  }, [refreshTeams]);
+    if (isAuthenticated) {
+      refreshTeams();
+    } else {
+      setTeams([]);
+      setLoading(false);
+    }
+  }, [isAuthenticated, refreshTeams]);
 
   const setSelectedTeamId = (id: string | null) => {
     setSelectedTeamIdState(id);

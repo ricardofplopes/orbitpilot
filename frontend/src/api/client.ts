@@ -20,7 +20,9 @@ client.interceptors.response.use(
       !error.config?.url?.includes('/auth/login')
     ) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
