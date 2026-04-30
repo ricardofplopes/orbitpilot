@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Users, Search } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Users, Search, CheckSquare, Square } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { useTeam } from '@/context/TeamContext';
 import { teams as teamsApi } from '@/api/services';
@@ -25,45 +25,69 @@ type FilterTab = 'all' | 'active' | 'inactive';
 
 const TeamsPage: React.FC = () => {
   const { selectedTeamId, selectedTeam } = useTeam();
-  const { data: members, loading, error, refetch } = useApi<MemberStats[]>(
+  const { data: members, loading, error, refetch, setData } = useApi<MemberStats[]>(
     () => selectedTeamId
       ? client.get(`/teams/${selectedTeamId}/member-stats`).then(r => r.data)
       : Promise.resolve([]),
     [selectedTeamId]
   );
-  const [toggling, setToggling] = useState<string | null>(null);
+  const [toggling, setToggling] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [filterTab, setFilterTab] = useState<FilterTab>('all');
 
-  const handleToggleActive = async (memberId: string, currentActive: boolean) => {
-    if (!selectedTeamId) return;
-    setToggling(memberId);
+  const handleToggleActive = useCallback(async (memberId: string, currentActive: boolean) => {
+    if (!selectedTeamId || !members) return;
+    // Optimistic update
+    setData(members.map(m => m.id === memberId ? { ...m, isActive: !currentActive } : m));
+    setToggling(prev => new Set(prev).add(memberId));
     try {
       await teamsApi.toggleMemberActive(selectedTeamId, memberId, !currentActive);
-      refetch();
     } catch (err) {
+      // Revert on failure
+      setData(members.map(m => m.id === memberId ? { ...m, isActive: currentActive } : m));
       console.error('Failed to toggle member', err);
     } finally {
-      setToggling(null);
+      setToggling(prev => { const next = new Set(prev); next.delete(memberId); return next; });
     }
-  };
+  }, [selectedTeamId, members, setData]);
+
+  const handleSelectAll = useCallback(async () => {
+    if (!selectedTeamId || !members) return;
+    const inactiveMembers = members.filter(m => !m.isActive);
+    if (inactiveMembers.length === 0) return;
+    // Optimistic: set all active
+    setData(members.map(m => ({ ...m, isActive: true })));
+    try {
+      await Promise.all(inactiveMembers.map(m => teamsApi.toggleMemberActive(selectedTeamId, m.id, true)));
+    } catch (err) {
+      refetch(); // Revert by refetching on error
+    }
+  }, [selectedTeamId, members, setData, refetch]);
+
+  const handleDeselectAll = useCallback(async () => {
+    if (!selectedTeamId || !members) return;
+    const activeMembers = members.filter(m => m.isActive);
+    if (activeMembers.length === 0) return;
+    // Optimistic: set all inactive
+    setData(members.map(m => ({ ...m, isActive: false })));
+    try {
+      await Promise.all(activeMembers.map(m => teamsApi.toggleMemberActive(selectedTeamId, m.id, false)));
+    } catch (err) {
+      refetch();
+    }
+  }, [selectedTeamId, members, setData, refetch]);
 
   const filteredMembers = useMemo(() => {
     if (!members) return [];
     let result = members;
-
-    // Filter by tab
     if (filterTab === 'active') result = result.filter(m => m.isActive);
     else if (filterTab === 'inactive') result = result.filter(m => !m.isActive);
-
-    // Filter by search
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(m =>
         m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)
       );
     }
-
     return result;
   }, [members, filterTab, search]);
 
@@ -91,7 +115,7 @@ const TeamsPage: React.FC = () => {
         <p className="text-sm text-orbit-slate mt-1">{counts.active} active of {counts.all} total members</p>
       </div>
 
-      {/* Search and filter controls */}
+      {/* Search, filter, and bulk actions */}
       <div className="flex items-center gap-4 flex-wrap">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orbit-slate" />
@@ -118,6 +142,24 @@ const TeamsPage: React.FC = () => {
               {tab === 'all' ? `All (${counts.all})` : tab === 'active' ? `Active (${counts.active})` : `Inactive (${counts.inactive})`}
             </button>
           ))}
+        </div>
+
+        {/* Select/Deselect All */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSelectAll}
+            disabled={counts.inactive === 0}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-orbit-navy-light text-orbit-slate hover:text-orbit-light hover:bg-orbit-navy-lighter/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <CheckSquare className="w-3.5 h-3.5" /> Select All
+          </button>
+          <button
+            onClick={handleDeselectAll}
+            disabled={counts.active === 0}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-orbit-navy-light text-orbit-slate hover:text-orbit-light hover:bg-orbit-navy-lighter/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Square className="w-3.5 h-3.5" /> Deselect All
+          </button>
         </div>
       </div>
 
@@ -148,7 +190,7 @@ const TeamsPage: React.FC = () => {
                     <input
                       type="checkbox"
                       checked={m.isActive}
-                      disabled={toggling === m.id}
+                      disabled={toggling.has(m.id)}
                       onChange={() => handleToggleActive(m.id, m.isActive)}
                       className="w-4 h-4 rounded border-orbit-navy-lighter text-orbit-blue focus:ring-orbit-blue/50 cursor-pointer disabled:cursor-wait"
                     />

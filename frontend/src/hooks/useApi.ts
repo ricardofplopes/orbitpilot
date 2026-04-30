@@ -23,5 +23,5 @@ export function useApi<T>(fetcher: () => Promise<T>, deps: any[] = []) {
     fetch();
   }, [fetch]);
 
-  return { data, loading, error, refetch: fetch };
+  return { data, loading, error, refetch: fetch, setData };
 }

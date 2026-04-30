@@ -229,7 +229,7 @@ const DateSprintFilter: React.FC<Props> = ({ value, onChange, availableSprints =
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-2 z-50 bg-orbit-card border border-orbit-navy-lighter/50 rounded-xl shadow-2xl min-w-[420px]">
+        <div className="absolute top-full right-0 mt-2 z-50 bg-orbit-card border border-orbit-navy-lighter/50 rounded-xl shadow-2xl w-[460px]">
           {/* Mode tabs */}
           <div className="flex border-b border-orbit-navy-lighter/50">
             <button
@@ -258,7 +258,7 @@ const DateSprintFilter: React.FC<Props> = ({ value, onChange, availableSprints =
                   <button
                     key={preset.label}
                     onClick={() => handlePreset(preset)}
-                    className={`px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+                    className={`px-2.5 py-2 text-xs rounded-md transition-colors text-center ${
                       value?.mode === 'date' && value.label === preset.label
                         ? 'bg-orbit-blue/20 text-orbit-blue border border-orbit-blue/30'
                         : 'text-orbit-slate hover:bg-orbit-navy-light hover:text-orbit-light'

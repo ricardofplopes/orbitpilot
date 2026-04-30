@@ -303,7 +303,7 @@ export class JiraService {
     this.logger.log(`Starting Jira sync. JQL: ${jql}`);
 
     do {
-      const fields = 'summary,status,priority,assignee,issuetype,customfield_10016,sprint,created,updated';
+      const fields = 'summary,status,priority,assignee,issuetype,customfield_10016,customfield_10020,fixVersions,created,updated';
       const params = new URLSearchParams({ jql, fields, maxResults: maxResults.toString() });
       if (nextPageToken) params.set('nextPageToken', nextPageToken);
 
@@ -335,7 +335,7 @@ export class JiraService {
             assignee: assigneeName,
             assigneeEmail: assigneeEmail,
             storyPoints: issue.fields?.customfield_10016 || null,
-            sprint: issue.fields?.sprint?.name || null,
+            sprint: this.extractSprintName(issue.fields),
             fixVersion: issue.fields?.fixVersions?.[0]?.name || null,
             externalUrl: browseUrl,
           };
@@ -553,5 +553,19 @@ export class JiraService {
     if (lower.includes('high')) return 'P1';
     if (lower.includes('medium')) return 'P2';
     return 'P3';
+  }
+
+  /** Extract sprint name from customfield_10020 (Jira Cloud sprint array) */
+  private extractSprintName(fields: any): string | null {
+    // customfield_10020 is the sprint field in Jira Cloud - array of sprint objects
+    const sprintField = fields?.customfield_10020;
+    if (Array.isArray(sprintField) && sprintField.length > 0) {
+      // Get the most recent/active sprint (last in array)
+      const activeSprint = sprintField.find((s: any) => s.state === 'active') || sprintField[sprintField.length - 1];
+      return activeSprint?.name || null;
+    }
+    // Fallback: try direct sprint field
+    if (fields?.sprint?.name) return fields.sprint.name;
+    return null;
   }
 }
