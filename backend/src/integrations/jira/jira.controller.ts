@@ -76,6 +76,18 @@ export class JiraController {
     return this.jiraService.syncIssues();
   }
 
+  @Get('sync-settings')
+  @UseGuards(JwtAuthGuard)
+  async getSyncSettings() {
+    return this.jiraService.getSyncSettings();
+  }
+
+  @Post('sync-settings')
+  @UseGuards(JwtAuthGuard)
+  async updateSyncSettings(@Body() body: { jqlFilter?: string; maxIssues?: number }) {
+    return this.jiraService.updateSyncSettings(body);
+  }
+
   @Get('issues')
   @UseGuards(JwtAuthGuard)
   async getIssues(

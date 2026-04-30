@@ -127,10 +127,10 @@ model WorkItem {
   team          Team?       @relation(fields: [teamId], references: [id])
   initiative    Initiative? @relation(fields: [initiativeId], references: [id])
 
+  @@unique([source, externalId], name: "source_externalId")
   @@index([teamId])
   @@index([status])
   @@index([assignee])
-  @@index([source, externalId])
   @@index([initiativeId])
   @@map("work_items")
 }

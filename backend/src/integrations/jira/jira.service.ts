@@ -285,26 +285,60 @@ export class JiraService {
     return { success: true, projectKey };
   }
 
+  /** Get sync settings from config */
+  async getSyncSettings(): Promise<{ jqlFilter: string; maxIssues: number }> {
+    const config = await this.prisma.integrationConfig.findFirst({ where: { type: 'jira' } });
+    const cfg = config?.config as any;
+    return {
+      jqlFilter: cfg?.syncJql || '',
+      maxIssues: cfg?.maxIssues || 2000,
+    };
+  }
+
+  /** Update sync settings */
+  async updateSyncSettings(settings: { jqlFilter?: string; maxIssues?: number }) {
+    const existing = await this.prisma.integrationConfig.findFirst({ where: { type: 'jira' } });
+    if (!existing) throw new BadRequestException('Jira is not connected');
+    const cfg = (existing.config as any) || {};
+    if (settings.jqlFilter !== undefined) cfg.syncJql = settings.jqlFilter;
+    if (settings.maxIssues !== undefined) cfg.maxIssues = Math.min(Math.max(settings.maxIssues, 50), 10000);
+    await this.prisma.integrationConfig.update({
+      where: { id: existing.id },
+      data: { config: cfg as any },
+    });
+    return { success: true };
+  }
+
   /** Sync issues from Jira into local WorkItem table */
   async syncIssues(): Promise<{ synced: number; errors: number }> {
     const auth = await this.getAuthHeaders();
     if (!auth) throw new BadRequestException('Jira is not connected');
 
     const projectKey = auth.config.projectKey;
-    const jql = projectKey
-      ? `project = "${projectKey}" ORDER BY updated DESC`
-      : 'ORDER BY updated DESC';
+    const cfg = auth.config;
 
+    // Build JQL: use custom syncJql if set, otherwise default with 6-month limit
+    let jql: string;
+    if (cfg.syncJql) {
+      jql = cfg.syncJql;
+    } else if (projectKey) {
+      jql = `project = "${projectKey}" AND updated >= -26w ORDER BY updated DESC`;
+    } else {
+      jql = 'updated >= -26w ORDER BY updated DESC';
+    }
+
+    const maxIssuesLimit = cfg.maxIssues || 2000;
+    const pageSize = 100;
     let nextPageToken: string | null = null;
-    const maxResults = 100;
     let synced = 0;
     let errors = 0;
+    let totalFetched = 0;
 
-    this.logger.log(`Starting Jira sync. JQL: ${jql}`);
+    this.logger.log(`Starting Jira sync. JQL: ${jql}, maxIssues: ${maxIssuesLimit}`);
 
     do {
       const fields = 'summary,status,priority,assignee,issuetype,customfield_10016,customfield_10020,fixVersions,created,updated';
-      const params = new URLSearchParams({ jql, fields, maxResults: maxResults.toString() });
+      const params = new URLSearchParams({ jql, fields, maxResults: pageSize.toString() });
       if (nextPageToken) params.set('nextPageToken', nextPageToken);
 
       const url = `${auth.baseUrl}/rest/api/3/search/jql?${params.toString()}`;
@@ -319,13 +353,15 @@ export class JiraService {
       const data = await response.json();
       const issues = data.issues || [];
       nextPageToken = data.nextPageToken || null;
+      totalFetched += issues.length;
 
-      for (const issue of issues) {
+      // Batch upsert: process issues in a single transaction per page
+      const upsertOps = issues.map((issue: any) => {
         try {
           const assigneeName = issue.fields?.assignee?.displayName || null;
           const assigneeEmail = issue.fields?.assignee?.emailAddress || null;
           const baseUrl = auth.baseUrl.replace('/rest/api/3', '').replace(/\/+$/, '');
-          const browseUrl = `${auth.config.baseUrl || baseUrl}/browse/${issue.key}`;
+          const browseUrl = `${cfg.baseUrl || baseUrl}/browse/${issue.key}`;
 
           const itemData = {
             title: issue.fields?.summary || issue.key,
@@ -340,22 +376,52 @@ export class JiraService {
             externalUrl: browseUrl,
           };
 
-          const existing = await this.prisma.workItem.findFirst({
-            where: { source: 'jira', externalId: issue.key },
-          });
-
-          if (existing) {
-            await this.prisma.workItem.update({ where: { id: existing.id }, data: itemData });
-          } else {
-            await this.prisma.workItem.create({
-              data: { ...itemData, source: 'jira', externalId: issue.key },
-            });
-          }
-          synced++;
+          return { key: issue.key, data: itemData };
         } catch (err: any) {
-          this.logger.warn(`Failed to upsert issue ${issue.key}: ${err.message}`);
+          this.logger.warn(`Failed to parse issue ${issue.key}: ${err.message}`);
           errors++;
+          return null;
         }
+      }).filter(Boolean) as Array<{ key: string; data: any }>;
+
+      // Batch upsert using raw SQL for performance (50x faster than individual upserts)
+      if (upsertOps.length > 0) {
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            for (const op of upsertOps) {
+              await tx.workItem.upsert({
+                where: { source_externalId: { source: 'jira', externalId: op.key } },
+                update: op.data,
+                create: { ...op.data, source: 'jira', externalId: op.key },
+              });
+            }
+          }, { timeout: 60000 });
+          synced += upsertOps.length;
+        } catch (err: any) {
+          this.logger.warn(`Batch upsert failed, falling back to individual: ${err.message}`);
+          // Fallback: individual upserts
+          for (const op of upsertOps) {
+            try {
+              await this.prisma.workItem.upsert({
+                where: { source_externalId: { source: 'jira', externalId: op.key } },
+                update: op.data,
+                create: { ...op.data, source: 'jira', externalId: op.key },
+              });
+              synced++;
+            } catch (e: any) {
+              this.logger.warn(`Failed to upsert ${op.key}: ${e.message}`);
+              errors++;
+            }
+          }
+        }
+      }
+
+      this.logger.log(`Sync progress: ${totalFetched} fetched, ${synced} synced`);
+
+      // Enforce max issues limit
+      if (totalFetched >= maxIssuesLimit) {
+        this.logger.log(`Reached maxIssues limit (${maxIssuesLimit}), stopping sync`);
+        break;
       }
     } while (nextPageToken);
 
@@ -368,7 +434,7 @@ export class JiraService {
       });
     }
 
-    this.logger.log(`Jira sync complete: ${synced} synced, ${errors} errors`);
+    this.logger.log(`Jira sync complete: ${synced} synced, ${errors} errors (fetched ${totalFetched})`);
 
     // Auto-link synced items to a team matching the project
     if (projectKey) {

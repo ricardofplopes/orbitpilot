@@ -84,8 +84,21 @@ export class DashboardService {
       .sort((a, b) => a.sprint.localeCompare(b.sprint))
       .slice(-10);
 
+    // Filter memberWorkload to only show active team members
+    let activeNames: string[] | null = null;
+    if (teamId) {
+      const activeMembers = await this.prisma.teamMember.findMany({
+        where: { teamId, isActive: true },
+        include: { user: { select: { name: true } } },
+      });
+      activeNames = activeMembers.map(m => m.user.name).filter(Boolean);
+    }
+
     const members = memberWorkload
       .filter(m => m.assignee)
+      .filter(m => !activeNames || activeNames.some(name =>
+        name.toLowerCase() === m.assignee!.toLowerCase()
+      ))
       .map(m => ({
         name: m.assignee!,
         activeItems: m._count,

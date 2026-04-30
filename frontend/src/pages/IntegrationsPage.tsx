@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { integrations } from '@/api/services';
 import { useTeam } from '@/context/TeamContext';
 import Spinner from '@/components/common/Spinner';
-import { CheckCircle, XCircle, ExternalLink, Unplug, Key, Loader2, RefreshCw, FolderOpen } from 'lucide-react';
+import { CheckCircle, XCircle, ExternalLink, Unplug, Key, Loader2, RefreshCw, FolderOpen, Settings } from 'lucide-react';
 
 const JiraIcon = () => (
   <svg viewBox="0 0 24 24" className="w-6 h-6" fill="#2563EB">
@@ -41,6 +41,9 @@ const JiraProjectSync: React.FC<{
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ synced: number; errors: number } | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [syncSettings, setSyncSettings] = useState({ jqlFilter: '', maxIssues: 2000 });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     setLoadingProjects(true);
@@ -48,6 +51,10 @@ const JiraProjectSync: React.FC<{
       .then(setProjects)
       .catch(() => {})
       .finally(() => setLoadingProjects(false));
+    // Load sync settings
+    integrations.getJiraSyncSettings()
+      .then(setSyncSettings)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -80,6 +87,18 @@ const JiraProjectSync: React.FC<{
     }
   };
 
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await integrations.updateJiraSyncSettings(syncSettings);
+      onSuccess('Sync settings saved');
+    } catch (err: any) {
+      onError(err?.response?.data?.message || 'Failed to save settings');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div>
@@ -100,6 +119,47 @@ const JiraProjectSync: React.FC<{
               <option key={p.key} value={p.key}>{p.key} — {p.name}</option>
             ))}
           </select>
+        )}
+      </div>
+
+      {/* Sync Settings */}
+      <div className="border border-orbit-card/60 rounded-lg p-3 space-y-2">
+        <button
+          onClick={() => setShowSettings(!showSettings)}
+          className="text-xs font-medium text-orbit-blue hover:text-orbit-purple flex items-center gap-1"
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Sync Settings {showSettings ? '▾' : '▸'}
+        </button>
+        {showSettings && (
+          <div className="space-y-2 pt-1">
+            <div>
+              <label className="block text-xs text-orbit-slate mb-1">JQL Filter (custom query to scope sync)</label>
+              <input
+                className="input text-xs font-mono"
+                placeholder={`e.g. project = "${selectedProject || 'BO'}" AND updated >= -26w`}
+                value={syncSettings.jqlFilter}
+                onChange={e => setSyncSettings(s => ({ ...s, jqlFilter: e.target.value }))}
+              />
+              <p className="text-[10px] text-orbit-slate/70 mt-0.5">
+                Leave empty to use default: project = "{selectedProject || 'BO'}" AND updated &gt;= -26w (last 6 months)
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs text-orbit-slate mb-1">Max Issues (safety limit)</label>
+              <input
+                type="number"
+                className="input text-xs w-32"
+                min={50}
+                max={10000}
+                value={syncSettings.maxIssues}
+                onChange={e => setSyncSettings(s => ({ ...s, maxIssues: parseInt(e.target.value) || 2000 }))}
+              />
+            </div>
+            <button onClick={handleSaveSettings} disabled={savingSettings} className="btn-secondary text-xs">
+              {savingSettings ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
         )}
       </div>
 

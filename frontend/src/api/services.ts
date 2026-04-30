@@ -175,7 +175,7 @@ export const integrations = {
     return data;
   },
   syncJira: async () => {
-    const { data } = await client.post<{ synced: number; errors: number }>('/integrations/jira/sync');
+    const { data } = await client.post<{ synced: number; errors: number }>('/integrations/jira/sync', {}, { timeout: 300000 });
     return data;
   },
   getJiraIssues: async (filters?: { assignee?: string; status?: string; sprint?: string }) => {
@@ -192,6 +192,14 @@ export const integrations = {
   },
   getJiraEpics: async () => {
     const { data } = await client.get('/integrations/jira/epics');
+    return data;
+  },
+  getJiraSyncSettings: async () => {
+    const { data } = await client.get<{ jqlFilter: string; maxIssues: number }>('/integrations/jira/sync-settings');
+    return data;
+  },
+  updateJiraSyncSettings: async (settings: { jqlFilter?: string; maxIssues?: number }) => {
+    const { data } = await client.post('/integrations/jira/sync-settings', settings);
     return data;
   },
   getGithubConfig: async () => {
