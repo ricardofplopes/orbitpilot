@@ -76,13 +76,14 @@ export class DashboardService {
 
     const velocity = sprintData
       .filter(s => s.sprint)
+      .filter(s => /^(BV BO|VBO)\s/i.test(s.sprint!))
       .map(s => ({
         sprint: s.sprint!,
         storyPoints: s._sum.storyPoints || 0,
         itemCount: s._count,
       }))
       .sort((a, b) => b.sprint.localeCompare(a.sprint))
-      .slice(0, 10);
+      .slice(0, 20);
 
     // Filter memberWorkload to only show active team members
     let activeNames: string[] | null = null;
@@ -140,7 +141,9 @@ export class DashboardService {
 
     return sprintData
       .filter(s => s.sprint)
+      .filter(s => /^(BV BO|VBO)\s/i.test(s.sprint!))
       .map(s => ({ name: s.sprint!, itemCount: s._count }))
-      .sort((a, b) => b.name.localeCompare(a.name));
+      .sort((a, b) => b.name.localeCompare(a.name))
+      .slice(0, 30);
   }
 }

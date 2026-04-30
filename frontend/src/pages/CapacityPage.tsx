@@ -3,7 +3,7 @@ import { Calendar, Plus, Users } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { capacity, teams as teamsApi, dashboard as dashboardApi } from '@/api/services';
 import { useTeam } from '@/context/TeamContext';
-import DateSprintFilter, { FilterState } from '@/components/filters/DateSprintFilter';
+import DateSprintFilter, { FilterState, getDefaultQuarterFilter } from '@/components/filters/DateSprintFilter';
 import CapacityChart from '@/components/charts/CapacityChart';
 import Modal from '@/components/common/Modal';
 import Button from '@/components/common/Button';
@@ -15,7 +15,7 @@ import type { Team, TeamMember } from '@/types';
 
 const CapacityPage: React.FC = () => {
   const { selectedTeamId, selectedTeam } = useTeam();
-  const [dateFilter, setDateFilter] = useState<FilterState>(null);
+  const [dateFilter, setDateFilter] = useState<FilterState>(getDefaultQuarterFilter);
   const [sprints, setSprints] = useState<Array<{ name: string; itemCount: number }>>([]);
 
   useEffect(() => {
@@ -76,18 +76,37 @@ const CapacityPage: React.FC = () => {
   if (loading) return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
   if (error) return <ErrorState message={error} onRetry={refetch} />;
 
-  const capacityByTeam = Array.isArray(capData)
-    ? capData.map((t: any) => ({
-        team: t.teamName || t.team || 'Unknown',
-        available: t.availableHours || t.available || 0,
-        committed: t.committedHours || t.committed || 0,
-        atRisk: t.atRisk || 0,
-        unavailable: t.ptoHours || t.unavailable || 0,
-        utilizationPercent: t.utilizationPercent || 0,
-        memberCount: t.memberCount || 0,
-        color: t.color,
-      }))
-    : [];
+  // Handle both array (summary) and object (team capacity) responses
+  let capacityByTeam: Array<{ team: string; available: number; committed: number; atRisk: number; unavailable: number; utilizationPercent: number; memberCount: number; color?: string; members?: any[] }> = [];
+  
+  if (Array.isArray(capData)) {
+    capacityByTeam = capData.map((t: any) => ({
+      team: t.teamName || t.team || 'Unknown',
+      available: t.availableHours || t.available || 0,
+      committed: t.committedHours || t.committed || 0,
+      atRisk: t.atRisk || 0,
+      unavailable: t.ptoHours || t.unavailable || 0,
+      utilizationPercent: t.utilizationPercent || 0,
+      memberCount: t.memberCount || 0,
+      color: t.color,
+    }));
+  } else if (capData && typeof capData === 'object') {
+    // Single team response from getTeamCapacity
+    const t = capData as any;
+    const committedHours = 0; // will be computed from work items separately
+    const available = t.totalAvailableHours || 0;
+    capacityByTeam = [{
+      team: selectedTeam?.name || 'Team',
+      available,
+      committed: committedHours,
+      atRisk: 0,
+      unavailable: t.totalPtoHours || 0,
+      utilizationPercent: available > 0 ? Math.round((committedHours / available) * 100) : 0,
+      memberCount: t.members?.length || 0,
+      color: selectedTeam?.color,
+      members: t.members,
+    }];
+  }
 
   const filteredCapacity = selectedTeamFilter
     ? capacityByTeam.filter((t) => t.team === selectedTeamFilter)

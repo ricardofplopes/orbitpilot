@@ -52,7 +52,7 @@ export class CapacityService {
     const effectiveEnd = endDate ? new Date(endDate) : new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 0);
 
     const members = await this.prisma.teamMember.findMany({
-      where: { teamId },
+      where: { teamId, isActive: true },
       include: {
         availability: {
           where: {

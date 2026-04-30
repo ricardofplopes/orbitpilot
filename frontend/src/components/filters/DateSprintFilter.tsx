@@ -18,6 +18,20 @@ export interface SprintFilter {
 
 export type FilterState = DateFilter | SprintFilter | null;
 
+/** Get default "This quarter" filter state */
+export function getDefaultQuarterFilter(): DateFilter {
+  const now = new Date();
+  const q = Math.floor(now.getMonth() / 3);
+  const start = new Date(now.getFullYear(), q * 3, 1);
+  const end = new Date(now.getFullYear(), q * 3 + 3, 0);
+  return {
+    mode: 'date',
+    startDate: start.toISOString().split('T')[0],
+    endDate: end.toISOString().split('T')[0],
+    label: 'This quarter',
+  };
+}
+
 interface DatePreset {
   label: string;
   getRange: () => { start: string; end: string };

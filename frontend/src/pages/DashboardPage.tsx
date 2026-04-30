@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { useApi } from '@/hooks/useApi';
 import { dashboard } from '@/api/services';
 import { useTeam } from '@/context/TeamContext';
-import DateSprintFilter, { FilterState } from '@/components/filters/DateSprintFilter';
+import DateSprintFilter, { FilterState, getDefaultQuarterFilter } from '@/components/filters/DateSprintFilter';
 import MetricCard from '@/components/cards/MetricCard';
 import InsightCard from '@/components/cards/InsightCard';
 import Badge from '@/components/common/Badge';
@@ -14,7 +14,7 @@ import EmptyState from '@/components/common/EmptyState';
 
 const DashboardPage: React.FC = () => {
   const { selectedTeamId, selectedTeam } = useTeam();
-  const [filter, setFilter] = useState<FilterState>(null);
+  const [filter, setFilter] = useState<FilterState>(getDefaultQuarterFilter);
   const [sprints, setSprints] = useState<Array<{ name: string; itemCount: number }>>([]);
 
   // Fetch available sprints

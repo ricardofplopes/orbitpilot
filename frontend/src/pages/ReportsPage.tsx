@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 import { useApi } from '@/hooks/useApi';
 import { useTeam } from '@/context/TeamContext';
 import { reports, teams as teamsApi, dashboard as dashboardApi } from '@/api/services';
-import DateSprintFilter, { FilterState } from '@/components/filters/DateSprintFilter';
+import DateSprintFilter, { FilterState, getDefaultQuarterFilter } from '@/components/filters/DateSprintFilter';
 import MetricCard from '@/components/cards/MetricCard';
 import Spinner from '@/components/common/Spinner';
 import ErrorState from '@/components/common/ErrorState';
@@ -17,7 +17,7 @@ const COLORS = ['#2563EB', '#7C3AED', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'
 const ReportsPage: React.FC = () => {
   const { selectedTeamId, selectedTeam } = useTeam();
   const [tab, setTab] = useState<'sprints' | 'team' | 'overall'>('sprints');
-  const [dateFilter, setDateFilter] = useState<FilterState>(null);
+  const [dateFilter, setDateFilter] = useState<FilterState>(getDefaultQuarterFilter);
   const [sprints, setSprints] = useState<Array<{ name: string; itemCount: number }>>([]);
 
   useEffect(() => {

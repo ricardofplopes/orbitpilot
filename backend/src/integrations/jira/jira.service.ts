@@ -342,7 +342,7 @@ export class JiraService {
     this.logger.log(`Cleared ${deleted.count} previous Jira items`);
 
     do {
-      const fields = 'summary,status,priority,assignee,issuetype,customfield_10016,customfield_10020,fixVersions,created,updated';
+      const fields = 'summary,status,priority,assignee,issuetype,customfield_10034,customfield_10020,fixVersions,created,updated';
       const params = new URLSearchParams({ jql, fields, maxResults: pageSize.toString() });
       if (nextPageToken) params.set('nextPageToken', nextPageToken);
 
@@ -375,7 +375,7 @@ export class JiraService {
             type: issue.fields?.issuetype?.name || null,
             assignee: assigneeName,
             assigneeEmail: assigneeEmail,
-            storyPoints: issue.fields?.customfield_10016 || null,
+            storyPoints: issue.fields?.customfield_10034 || null,
             sprint: this.extractSprintName(issue.fields),
             fixVersion: issue.fields?.fixVersions?.[0]?.name || null,
             externalUrl: browseUrl,

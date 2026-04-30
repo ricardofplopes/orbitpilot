@@ -3,7 +3,7 @@ import { Plus, Search, ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { work, teams as teamsApi, dashboard } from '@/api/services';
 import { useTeam } from '@/context/TeamContext';
-import DateSprintFilter, { FilterState } from '@/components/filters/DateSprintFilter';
+import DateSprintFilter, { FilterState, getDefaultQuarterFilter } from '@/components/filters/DateSprintFilter';
 import Modal from '@/components/common/Modal';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -35,7 +35,7 @@ const sourceIcon = (s: string) => {
 const WorkPage: React.FC = () => {
   const { selectedTeamId } = useTeam();
   const [filters, setFilters] = useState<{ teamId?: string; status?: string; source?: string }>({});
-  const [dateFilter, setDateFilter] = useState<FilterState>(null);
+  const [dateFilter, setDateFilter] = useState<FilterState>(getDefaultQuarterFilter);
   const [sprints, setSprints] = useState<Array<{ name: string; itemCount: number }>>([]);
 
   useEffect(() => {
