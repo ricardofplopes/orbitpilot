@@ -117,6 +117,7 @@ model WorkItem {
   assignee      String?
   assigneeEmail String?     @map("assignee_email")
   sprint        String?
+  fixVersion    String?     @map("fix_version")
   teamId        String?     @map("team_id")
   initiativeId  String?     @map("initiative_id")
   cycleTime     Float?      @map("cycle_time")

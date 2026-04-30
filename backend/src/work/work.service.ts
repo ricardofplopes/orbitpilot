@@ -98,4 +98,41 @@ export class WorkService {
     ]);
     return { todo, in_progress, in_review, done, total };
   }
+
+  async getReleases(teamId?: string) {
+    const where: any = { fixVersion: { not: null } };
+    if (teamId) where.teamId = teamId;
+
+    const items = await this.prisma.workItem.findMany({
+      where,
+      select: { fixVersion: true, status: true, storyPoints: true },
+    });
+
+    // Group by fixVersion
+    const versionMap = new Map<string, { total: number; done: number; inProgress: number; todo: number; sp: number }>();
+    for (const item of items) {
+      const v = item.fixVersion!;
+      if (!versionMap.has(v)) {
+        versionMap.set(v, { total: 0, done: 0, inProgress: 0, todo: 0, sp: 0 });
+      }
+      const entry = versionMap.get(v)!;
+      entry.total++;
+      entry.sp += item.storyPoints || 0;
+      if (item.status === 'done') entry.done++;
+      else if (item.status === 'in_progress' || item.status === 'in_review') entry.inProgress++;
+      else entry.todo++;
+    }
+
+    return Array.from(versionMap.entries())
+      .map(([version, data]) => ({
+        version,
+        totalItems: data.total,
+        doneItems: data.done,
+        inProgressItems: data.inProgress,
+        todoItems: data.todo,
+        progress: data.total > 0 ? Math.round((data.done / data.total) * 100) : 0,
+        storyPoints: data.sp,
+      }))
+      .sort((a, b) => b.totalItems - a.totalItems);
+  }
 }

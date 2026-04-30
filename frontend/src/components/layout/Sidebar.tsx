@@ -9,6 +9,7 @@ import {
   LineChart,
   Plug,
   Settings,
+  Package,
 } from 'lucide-react';
 
 const navItems = [
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/planning', label: 'Plan', icon: Calendar },
   { to: '/teams', label: 'Teams', icon: Users },
   { to: '/work', label: 'Work', icon: ListChecks },
+  { to: '/releases', label: 'Releases', icon: Package },
   { to: '/reports', label: 'Reports', icon: LineChart },
   { to: '/integrations', label: 'Integrations', icon: Plug },
   { to: '/settings', label: 'Settings', icon: Settings },

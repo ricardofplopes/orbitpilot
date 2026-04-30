@@ -78,8 +78,8 @@ const DashboardPage: React.FC = () => {
         />
         <MetricCard
           title="SP Delivered"
-          value={data.totalSpDelivered}
-          subtitle="Story points done"
+          value={data.totalSpDelivered || data.totalItemsDelivered || 0}
+          subtitle={data.totalSpDelivered ? "Story points done" : "Items delivered"}
           accentColor="purple"
         />
       </div>
@@ -120,13 +120,13 @@ const DashboardPage: React.FC = () => {
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
                   labelStyle={{ color: '#f8fafc' }}
-                  itemStyle={{ color: '#818cf8' }}
                 />
-                <Bar dataKey="storyPoints" fill="#818cf8" radius={[4, 4, 0, 0]} name="Story Points" />
+                <Bar dataKey="itemCount" fill="#818cf8" radius={[4, 4, 0, 0]} name="Items Delivered" />
+                <Bar dataKey="storyPoints" fill="#6366f1" radius={[4, 4, 0, 0]} name="Story Points" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-sm text-orbit-slate py-8 text-center">No sprint data available yet</p>
+            <p className="text-sm text-orbit-slate py-8 text-center">No sprint data available yet. Sync issues from Jira to populate sprint velocity.</p>
           )}
         </div>
 

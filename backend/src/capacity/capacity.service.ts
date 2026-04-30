@@ -45,22 +45,25 @@ export class CapacityService {
     });
   }
 
-  async calculateTeamCapacity(teamId: string, startDate: string, endDate: string) {
+  async calculateTeamCapacity(teamId: string, startDate?: string, endDate?: string) {
+    // Default to current quarter if no dates provided
+    const now = new Date();
+    const effectiveStart = startDate ? new Date(startDate) : new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    const effectiveEnd = endDate ? new Date(endDate) : new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 0);
+
     const members = await this.prisma.teamMember.findMany({
       where: { teamId },
       include: {
         availability: {
           where: {
-            date: { gte: new Date(startDate), lte: new Date(endDate) },
+            date: { gte: effectiveStart, lte: effectiveEnd },
           },
         },
         user: { select: { name: true } },
       },
     });
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const weeks = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+    const weeks = Math.max(1, Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (7 * 24 * 60 * 60 * 1000)));
 
     let totalCapacity = 0;
     let totalPtoHours = 0;

@@ -15,6 +15,11 @@ export class WorkController {
     return this.workService.getWorkSummary();
   }
 
+  @Get('releases')
+  async getReleases(@Query('teamId') teamId?: string) {
+    return this.workService.getReleases(teamId);
+  }
+
   @Get()
   async findAll(
     @Query('teamId') teamId?: string,

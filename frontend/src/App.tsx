@@ -11,6 +11,7 @@ import PlanningPage from '@/pages/PlanningPage';
 import TeamsPage from '@/pages/TeamsPage';
 import PeoplePage from '@/pages/PeoplePage';
 import WorkPage from '@/pages/WorkPage';
+import ReleasesPage from '@/pages/ReleasesPage';
 import ReportsPage from '@/pages/ReportsPage';
 import IntegrationsPage from '@/pages/IntegrationsPage';
 import SettingsPage from '@/pages/SettingsPage';
@@ -62,6 +63,7 @@ const AppRoutes: React.FC = () => {
                 <Route path="/teams" element={<TeamsPage />} />
                 <Route path="/people" element={<PeoplePage />} />
                 <Route path="/work" element={<WorkPage />} />
+                <Route path="/releases" element={<ReleasesPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/integrations" element={<IntegrationsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />

@@ -93,6 +93,7 @@ export class DashboardService {
 
     // Total story points delivered
     const totalSpDelivered = velocity.reduce((sum, s) => sum + s.storyPoints, 0);
+    const totalItemsDelivered = velocity.reduce((sum, s) => sum + s.itemCount, 0);
 
     return {
       committedWork: totalActive,
@@ -100,6 +101,7 @@ export class DashboardService {
       doneWork: totalDone,
       avgCycleTime,
       totalSpDelivered,
+      totalItemsDelivered,
       workByStatus,
       velocity,
       members,

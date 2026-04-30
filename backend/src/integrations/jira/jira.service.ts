@@ -336,6 +336,7 @@ export class JiraService {
             assigneeEmail: assigneeEmail,
             storyPoints: issue.fields?.customfield_10016 || null,
             sprint: issue.fields?.sprint?.name || null,
+            fixVersion: issue.fields?.fixVersions?.[0]?.name || null,
             externalUrl: browseUrl,
           };
 

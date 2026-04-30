@@ -109,6 +109,7 @@ export class TeamsService {
         ]);
 
         return {
+          id: m.id,
           name: userName,
           email: m.user.email,
           role: m.role,

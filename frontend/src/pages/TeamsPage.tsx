@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Users, ExternalLink } from 'lucide-react';
+import { Users, X } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { useTeam } from '@/context/TeamContext';
 import { teams as teamsApi } from '@/api/services';
@@ -10,6 +10,7 @@ import EmptyState from '@/components/common/EmptyState';
 import client from '@/api/client';
 
 interface MemberStats {
+  id: string;
   name: string;
   email: string;
   role: string;
@@ -27,6 +28,21 @@ const TeamsPage: React.FC = () => {
       : Promise.resolve([]),
     [selectedTeamId]
   );
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const handleRemoveMember = async (memberId: string, name: string) => {
+    if (!selectedTeamId) return;
+    if (!confirm(`Remove ${name} from this team?`)) return;
+    setRemoving(memberId);
+    try {
+      await client.delete(`/teams/${selectedTeamId}/members/${memberId}`);
+      refetch();
+    } catch (err) {
+      console.error('Failed to remove member', err);
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   if (!selectedTeamId) {
     return <EmptyState title="No team selected" description="Select a team from the top bar to view members" />;
@@ -60,11 +76,12 @@ const TeamsPage: React.FC = () => {
                 <th className="px-4 py-3 text-center text-xs font-medium text-orbit-slate uppercase">Active Items</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-orbit-slate uppercase">Done</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-orbit-slate uppercase">SP Delivered</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-orbit-slate uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-orbit-navy-lighter/30">
               {members.map((m) => (
-                <tr key={m.email} className="hover:bg-orbit-navy-light/50 transition-colors">
+                <tr key={m.id || m.email} className="hover:bg-orbit-navy-light/50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-gradient-brand flex items-center justify-center shrink-0">
@@ -82,6 +99,16 @@ const TeamsPage: React.FC = () => {
                   <td className="px-4 py-3 text-center text-sm text-orbit-light">{m.activeItems}</td>
                   <td className="px-4 py-3 text-center text-sm text-green-400">{m.doneItems}</td>
                   <td className="px-4 py-3 text-center text-sm font-medium text-orbit-light">{m.totalSp}</td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => handleRemoveMember(m.id, m.name)}
+                      disabled={removing === m.id}
+                      className="p-1.5 rounded-lg text-orbit-slate hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                      title="Remove from team"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
