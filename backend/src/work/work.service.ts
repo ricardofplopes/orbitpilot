@@ -11,6 +11,8 @@ export class WorkService {
     status?: string;
     source?: string;
     initiativeId?: string;
+    limit?: number;
+    offset?: number;
   }) {
     const where: any = {};
     if (filters?.teamId) where.teamId = filters.teamId;
@@ -18,13 +20,18 @@ export class WorkService {
     if (filters?.source) where.source = filters.source;
     if (filters?.initiativeId) where.initiativeId = filters.initiativeId;
 
+    const take = filters?.limit || 100;
+    const skip = filters?.offset || 0;
+
     return this.prisma.workItem.findMany({
       where,
       include: {
         team: { select: { id: true, name: true, color: true } },
         initiative: { select: { id: true, title: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { updatedAt: 'desc' },
+      take,
+      skip,
     });
   }
 

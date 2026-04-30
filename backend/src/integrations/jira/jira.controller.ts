@@ -92,6 +92,15 @@ export class JiraController {
     return this.jiraService.getIssuesByAssignee();
   }
 
+  @Post('link-to-team')
+  @UseGuards(JwtAuthGuard)
+  async linkToTeam(@Body() body: { teamId?: string }) {
+    const config = await this.jiraService.getConfig();
+    const projectKey = config?.projectKey || 'BO';
+    await this.jiraService.linkSyncedItemsToTeam(projectKey, body.teamId);
+    return { success: true };
+  }
+
   @Get('epics')
   @UseGuards(JwtAuthGuard)
   async getEpics() {

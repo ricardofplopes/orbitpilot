@@ -92,13 +92,18 @@ export class CapacityService {
   }
 
   async getCapacitySummary(startDate: string, endDate: string) {
+    // Default to current quarter if no dates provided
+    const now = new Date();
+    const effectiveStart = startDate ? new Date(startDate) : new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    const effectiveEnd = endDate ? new Date(endDate) : new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 + 3, 0);
+
     const teams = await this.prisma.team.findMany({
       include: {
         members: {
           include: {
             availability: {
               where: {
-                date: { gte: new Date(startDate), lte: new Date(endDate) },
+                date: { gte: effectiveStart, lte: effectiveEnd },
               },
             },
           },
@@ -107,9 +112,7 @@ export class CapacityService {
       },
     });
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const weeks = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+    const weeks = Math.max(1, Math.ceil((effectiveEnd.getTime() - effectiveStart.getTime()) / (7 * 24 * 60 * 60 * 1000)));
 
     return teams.map((team) => {
       const baseCapacity = team.members.reduce((sum, m) => sum + m.weeklyCapacity * weeks, 0);

@@ -8,24 +8,37 @@ export class DashboardService {
   async getDashboardData() {
     const [
       teams,
-      workItems,
+      workByStatusRaw,
+      workByTeamRaw,
+      totalActive,
+      totalAtRisk,
+      avgCycleTimeResult,
       insights,
       activePlan,
     ] = await Promise.all([
       this.prisma.team.findMany({
         include: {
-          members: {
-            include: {
-              availability: true,
-            },
-          },
-          workItems: true,
+          members: { include: { availability: true } },
+          workItems: { where: { status: { notIn: ['done', 'cancelled'] } } },
         },
       }),
-      this.prisma.workItem.findMany({
-        include: {
-          team: { select: { id: true, name: true, color: true } },
-        },
+      this.prisma.workItem.groupBy({
+        by: ['status'],
+        _count: true,
+      }),
+      this.prisma.workItem.groupBy({
+        by: ['teamId'],
+        _count: true,
+      }),
+      this.prisma.workItem.count({
+        where: { status: { notIn: ['done', 'cancelled'] } },
+      }),
+      this.prisma.workItem.count({
+        where: { priority: { in: ['P1', 'critical'] }, status: { not: 'done' } },
+      }),
+      this.prisma.workItem.aggregate({
+        where: { status: 'done', cycleTime: { not: null } },
+        _avg: { cycleTime: true },
       }),
       this.prisma.insight.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
       this.prisma.quarterPlan.findFirst({
@@ -39,24 +52,37 @@ export class DashboardService {
     ]);
 
     // Work by status
+    const statusMap: Record<string, number> = {};
+    for (const r of workByStatusRaw) statusMap[r.status] = r._count;
     const workByStatus = {
-      todo: workItems.filter((w) => w.status === 'todo').length,
-      in_progress: workItems.filter((w) => w.status === 'in_progress').length,
-      in_review: workItems.filter((w) => w.status === 'in_review').length,
-      done: workItems.filter((w) => w.status === 'done').length,
+      todo: statusMap['todo'] || 0,
+      in_progress: statusMap['in_progress'] || statusMap['in-progress'] || 0,
+      in_review: statusMap['in_review'] || statusMap['in-review'] || 0,
+      done: statusMap['done'] || 0,
     };
 
-    // Work by team
-    const workByTeam = teams.map((t) => ({
-      team: t.name,
-      count: t.workItems.length,
-    }));
+    // Work by team (using groupBy results)
+    const teamIdMap = new Map(teams.map(t => [t.id, t.name]));
+    const workByTeam: { team: string; count: number }[] = [];
+    let unassignedCount = 0;
+    for (const r of workByTeamRaw) {
+      if (r.teamId && teamIdMap.has(r.teamId)) {
+        workByTeam.push({ team: teamIdMap.get(r.teamId)!, count: r._count });
+      } else {
+        unassignedCount += r._count;
+      }
+    }
+    if (unassignedCount > 0) {
+      workByTeam.push({ team: 'Unassigned', count: unassignedCount });
+    }
+    // Sort by count descending
+    workByTeam.sort((a, b) => b.count - a.count);
 
     // Capacity by team (2-week sprint assumption)
     const capacityByTeam = teams.map((t) => {
       const weeklyCapacity = t.members.reduce((sum, m) => sum + m.weeklyCapacity, 0);
       const sprintCapacity = weeklyCapacity * 2;
-      const activeItems = t.workItems.filter((w) => w.status !== 'done' && w.status !== 'cancelled');
+      const activeItems = t.workItems;
       const committedHours = activeItems.reduce((sum, w) => sum + (w.storyPoints || 0) * 4, 0);
       const utilization = sprintCapacity > 0 ? Math.round((committedHours / sprintCapacity) * 100) : 0;
       const atRiskItems = activeItems.filter((w) => w.priority === 'P1' || w.priority === 'critical');
@@ -74,27 +100,19 @@ export class DashboardService {
       };
     });
 
-    // Aggregate metrics
+    // Aggregate capacity percent
     const allCapacity = teams.map((t) => {
       const weeklyCapacity = t.members.reduce((sum, m) => sum + m.weeklyCapacity, 0);
       const sprintCapacity = weeklyCapacity * 2;
-      const committedHours = t.workItems
-        .filter((w) => w.status !== 'done' && w.status !== 'cancelled')
-        .reduce((sum, w) => sum + (w.storyPoints || 0) * 4, 0);
+      const committedHours = t.workItems.reduce((sum, w) => sum + (w.storyPoints || 0) * 4, 0);
       return sprintCapacity > 0 ? Math.round((committedHours / sprintCapacity) * 100) : 0;
     });
     const totalCapacityPercent = allCapacity.length > 0
       ? Math.round(allCapacity.reduce((s, c) => s + c, 0) / allCapacity.length)
       : 0;
 
-    const committedWork = workItems.filter((w) => w.status !== 'done' && w.status !== 'cancelled').length;
-    const atRiskItems = workItems.filter(
-      (w) => (w.priority === 'P1' || w.priority === 'critical') && w.status !== 'done',
-    );
-
-    const completedWithCycleTime = workItems.filter((w) => w.status === 'done' && w.cycleTime);
-    const avgCycleTime = completedWithCycleTime.length > 0
-      ? Math.round((completedWithCycleTime.reduce((s, w) => s + (w.cycleTime || 0), 0) / completedWithCycleTime.length) * 10) / 10
+    const avgCycleTime = avgCycleTimeResult._avg.cycleTime
+      ? Math.round(avgCycleTimeResult._avg.cycleTime * 10) / 10
       : 0;
 
     // Top priorities (P1 initiatives from active plan)
@@ -128,8 +146,8 @@ export class DashboardService {
 
     return {
       teamCapacityPercent: totalCapacityPercent,
-      committedWork,
-      atRiskWork: atRiskItems.length,
+      committedWork: totalActive,
+      atRiskWork: totalAtRisk,
       avgCycleTime,
       workByStatus,
       workByTeam,

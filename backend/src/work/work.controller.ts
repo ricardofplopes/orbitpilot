@@ -21,8 +21,14 @@ export class WorkController {
     @Query('status') status?: string,
     @Query('source') source?: string,
     @Query('initiativeId') initiativeId?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
-    return this.workService.findAll({ teamId, status, source, initiativeId });
+    return this.workService.findAll({
+      teamId, status, source, initiativeId,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+    });
   }
 
   @Post()

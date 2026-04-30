@@ -368,7 +368,42 @@ export class JiraService {
     }
 
     this.logger.log(`Jira sync complete: ${synced} synced, ${errors} errors`);
+
+    // Auto-link synced items to a team matching the project
+    if (projectKey) {
+      await this.linkSyncedItemsToTeam(projectKey);
+    }
+
     return { synced, errors };
+  }
+
+  /** Link synced Jira items to a team. Creates the team if it doesn't exist. */
+  async linkSyncedItemsToTeam(projectKey: string, teamId?: string) {
+    let team: any;
+
+    if (teamId) {
+      team = await this.prisma.team.findUnique({ where: { id: teamId } });
+    } else {
+      // Find or create a team named after the Jira project
+      team = await this.prisma.team.findFirst({
+        where: { name: { contains: projectKey, mode: 'insensitive' } },
+      });
+      if (!team) {
+        team = await this.prisma.team.create({
+          data: { name: `${projectKey} Team`, color: '#6366f1' },
+        });
+        this.logger.log(`Created team "${team.name}" for project ${projectKey}`);
+      }
+    }
+
+    if (!team) return;
+
+    // Link all jira items without a team to this team
+    const result = await this.prisma.workItem.updateMany({
+      where: { source: 'jira', teamId: null },
+      data: { teamId: team.id },
+    });
+    this.logger.log(`Linked ${result.count} synced items to team "${team.name}"`);
   }
 
   /** Get issues from local DB (synced from Jira or manually created) */
@@ -404,7 +439,7 @@ export class JiraService {
   /** Get issues grouped by assignee */
   async getIssuesByAssignee() {
     const items = await this.prisma.workItem.findMany({
-      where: { source: 'jira', assignee: { not: null } },
+      where: { source: 'jira', assignee: { not: '' } },
       orderBy: { assignee: 'asc' },
     });
 
