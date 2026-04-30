@@ -45,4 +45,9 @@ export class TeamsController {
   async removeMember(@Param('id') id: string, @Param('memberId') memberId: string) {
     return this.teamsService.removeMember(id, memberId);
   }
+
+  @Get(':id/member-stats')
+  async getMemberStats(@Param('id') id: string) {
+    return this.teamsService.getMemberStats(id);
+  }
 }

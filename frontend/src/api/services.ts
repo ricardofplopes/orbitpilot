@@ -212,8 +212,9 @@ export const insights = {
 
 // Dashboard
 export const dashboard = {
-  getDashboard: async () => {
-    const { data } = await client.get<DashboardData>('/dashboard');
+  getDashboard: async (teamId?: string) => {
+    const params = teamId ? { teamId } : {};
+    const { data } = await client.get('/dashboard', { params });
     return data;
   },
 };

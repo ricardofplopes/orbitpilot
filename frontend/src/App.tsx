@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { TeamProvider } from '@/context/TeamContext';
 import AppLayout from '@/components/layout/AppLayout';
 import Spinner from '@/components/common/Spinner';
 import LoginPage from '@/pages/LoginPage';
@@ -78,7 +79,9 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <TeamProvider>
+          <AppRoutes />
+        </TeamProvider>
       </AuthProvider>
     </BrowserRouter>
   );

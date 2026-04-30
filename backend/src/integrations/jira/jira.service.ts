@@ -372,9 +372,66 @@ export class JiraService {
     // Auto-link synced items to a team matching the project
     if (projectKey) {
       await this.linkSyncedItemsToTeam(projectKey);
+      await this.syncTeamMembersFromAssignees(projectKey);
     }
 
     return { synced, errors };
+  }
+
+  /** Sync team members by creating User + TeamMember records from Jira assignees */
+  async syncTeamMembersFromAssignees(projectKey: string) {
+    // Find the team for this project
+    const team = await this.prisma.team.findFirst({
+      where: { name: { contains: projectKey, mode: 'insensitive' } },
+    });
+    if (!team) return;
+
+    // Get unique assignees from synced items (active in last 180 days)
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 180);
+
+    const assignees = await this.prisma.workItem.findMany({
+      where: {
+        source: 'jira',
+        teamId: team.id,
+        assignee: { not: '' },
+        updatedAt: { gte: cutoffDate },
+      },
+      select: { assignee: true, assigneeEmail: true },
+      distinct: ['assignee'],
+    });
+
+    let created = 0;
+    for (const a of assignees) {
+      if (!a.assignee) continue;
+
+      // Create or find user by email (or by name if no email)
+      const email = a.assigneeEmail || `${a.assignee.toLowerCase().replace(/[^a-z0-9]/g, '.')}@jira.synced`;
+      let user = await this.prisma.user.findUnique({ where: { email } });
+      if (!user) {
+        user = await this.prisma.user.create({
+          data: {
+            email,
+            name: a.assignee,
+            passwordHash: '', // non-login account
+            role: 'member',
+          },
+        });
+      }
+
+      // Create TeamMember if not exists
+      const existing = await this.prisma.teamMember.findUnique({
+        where: { userId_teamId: { userId: user.id, teamId: team.id } },
+      });
+      if (!existing) {
+        await this.prisma.teamMember.create({
+          data: { userId: user.id, teamId: team.id, role: 'engineer', weeklyCapacity: 40 },
+        });
+        created++;
+      }
+    }
+
+    this.logger.log(`Synced team members: ${created} new members added to "${team.name}" (${assignees.length} total assignees)`);
   }
 
   /** Link synced Jira items to a team. Creates the team if it doesn't exist. */
@@ -419,8 +476,8 @@ export class JiraService {
       take: 200,
     });
 
-    // If no synced items exist, return mock data
-    if (items.length === 0) return this.getMockIssues();
+    // If no synced items exist, return empty array
+    if (items.length === 0) return [];
 
     return items.map(item => ({
       key: item.externalId || item.id,
@@ -443,7 +500,7 @@ export class JiraService {
       orderBy: { assignee: 'asc' },
     });
 
-    if (items.length === 0) return this.getMockIssuesByAssignee();
+    if (items.length === 0) return {};
 
     const grouped: Record<string, any[]> = {};
     for (const item of items) {
@@ -469,7 +526,7 @@ export class JiraService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    if (items.length === 0) return this.getMockEpics();
+    if (items.length === 0) return [];
 
     return items.map(item => ({
       key: item.externalId || item.id,
@@ -495,38 +552,5 @@ export class JiraService {
     if (lower.includes('high')) return 'P1';
     if (lower.includes('medium')) return 'P2';
     return 'P3';
-  }
-
-  private getMockIssues() {
-    return [
-      { key: 'PROJ-101', summary: 'Implement checkout flow redesign', status: 'in_progress', priority: 'P1', assignee: 'Alice Chen', storyPoints: 8, type: 'Story', sprint: 'Sprint 23' },
-      { key: 'PROJ-102', summary: 'Fix payment processing timeout', status: 'todo', priority: 'P1', assignee: 'Bob Smith', storyPoints: 5, type: 'Bug', sprint: 'Sprint 23' },
-      { key: 'PROJ-103', summary: 'Add unit tests for payment service', status: 'done', priority: 'P2', assignee: 'Carol Davis', storyPoints: 3, type: 'Task', sprint: 'Sprint 22' },
-      { key: 'PROJ-104', summary: 'Database migration for user profiles', status: 'in_review', priority: 'P1', assignee: 'David Park', storyPoints: 5, type: 'Story', sprint: 'Sprint 23' },
-      { key: 'PROJ-105', summary: 'API rate limiting implementation', status: 'in_progress', priority: 'P2', assignee: 'Eva Martinez', storyPoints: 8, type: 'Story', sprint: 'Sprint 23' },
-      { key: 'PROJ-106', summary: 'Mobile push notification service', status: 'todo', priority: 'P3', assignee: null, storyPoints: 13, type: 'Epic', sprint: 'Sprint 24' },
-    ];
-  }
-
-  private getMockEpics() {
-    return [
-      { key: 'PROJ-50', summary: 'Checkout Flow Redesign', status: 'in_progress', issueCount: 12 },
-      { key: 'PROJ-51', summary: 'Payment Gateway Migration', status: 'todo', issueCount: 8 },
-      { key: 'PROJ-52', summary: 'Mobile App V2', status: 'in_progress', issueCount: 15 },
-    ];
-  }
-
-  private getMockIssuesByAssignee() {
-    return {
-      'Alice Chen': [
-        { key: 'PROJ-101', summary: 'Implement checkout flow redesign', status: 'in_progress', priority: 'P1', storyPoints: 8, type: 'Story', sprint: 'Sprint 23' },
-      ],
-      'Bob Smith': [
-        { key: 'PROJ-102', summary: 'Fix payment processing timeout', status: 'todo', priority: 'P1', storyPoints: 5, type: 'Bug', sprint: 'Sprint 23' },
-      ],
-      'Carol Davis': [
-        { key: 'PROJ-103', summary: 'Add unit tests for payment service', status: 'done', priority: 'P2', storyPoints: 3, type: 'Task', sprint: 'Sprint 22' },
-      ],
-    };
   }
 }

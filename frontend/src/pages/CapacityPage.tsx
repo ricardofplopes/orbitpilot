@@ -2,16 +2,22 @@ import React, { useState } from 'react';
 import { Calendar, Plus, Users } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { capacity, teams as teamsApi } from '@/api/services';
+import { useTeam } from '@/context/TeamContext';
 import CapacityChart from '@/components/charts/CapacityChart';
 import Modal from '@/components/common/Modal';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
 import Spinner from '@/components/common/Spinner';
 import ErrorState from '@/components/common/ErrorState';
+import EmptyState from '@/components/common/EmptyState';
 import type { Team, TeamMember } from '@/types';
 
 const CapacityPage: React.FC = () => {
-  const { data: capData, loading, error, refetch } = useApi(() => capacity.getSummary());
+  const { selectedTeamId, selectedTeam } = useTeam();
+  const { data: capData, loading, error, refetch } = useApi(
+    () => selectedTeamId ? capacity.getTeamCapacity(selectedTeamId) : capacity.getSummary(),
+    [selectedTeamId]
+  );
   const { data: teamsList } = useApi<Team[]>(() => teamsApi.getTeams());
   const [showPtoModal, setShowPtoModal] = useState(false);
   const [showPeriodModal, setShowPeriodModal] = useState(false);

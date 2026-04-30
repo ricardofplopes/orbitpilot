@@ -80,4 +80,47 @@ export class TeamsService {
   async getAllTeamsWithMembers() {
     return this.findAll();
   }
+
+  async getMemberStats(teamId: string) {
+    const team = await this.prisma.team.findUnique({ where: { id: teamId } });
+    if (!team) throw new NotFoundException('Team not found');
+
+    // Get members with their user info
+    const members = await this.prisma.teamMember.findMany({
+      where: { teamId },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+
+    // For each member, get work item stats by matching assignee name
+    const stats = await Promise.all(
+      members.map(async (m) => {
+        const userName = m.user.name;
+        const [activeItems, doneItems, totalSpResult] = await Promise.all([
+          this.prisma.workItem.count({
+            where: { teamId, assignee: userName, status: { notIn: ['done', 'cancelled'] } },
+          }),
+          this.prisma.workItem.count({
+            where: { teamId, assignee: userName, status: 'done' },
+          }),
+          this.prisma.workItem.aggregate({
+            where: { teamId, assignee: userName, status: 'done' },
+            _sum: { storyPoints: true },
+          }),
+        ]);
+
+        return {
+          name: userName,
+          email: m.user.email,
+          role: m.role,
+          weeklyCapacity: m.weeklyCapacity,
+          activeItems,
+          doneItems,
+          totalSp: totalSpResult._sum.storyPoints || 0,
+        };
+      })
+    );
+
+    // Sort by active items descending
+    return stats.sort((a, b) => b.activeItems - a.activeItems);
+  }
 }

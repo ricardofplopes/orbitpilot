@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Search, ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
 import { work, teams as teamsApi } from '@/api/services';
+import { useTeam } from '@/context/TeamContext';
 import Modal from '@/components/common/Modal';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -31,8 +32,10 @@ const sourceIcon = (s: string) => {
 };
 
 const WorkPage: React.FC = () => {
+  const { selectedTeamId } = useTeam();
   const [filters, setFilters] = useState<{ teamId?: string; status?: string; source?: string }>({});
-  const { data: items, loading, error, refetch } = useApi<WorkItem[]>(() => work.getWorkItems(filters), [filters.teamId, filters.status, filters.source]);
+  const effectiveFilters = { ...filters, teamId: filters.teamId || selectedTeamId || undefined };
+  const { data: items, loading, error, refetch } = useApi<WorkItem[]>(() => work.getWorkItems(effectiveFilters), [selectedTeamId, filters.teamId, filters.status, filters.source]);
   const { data: teamsList } = useApi<Team[]>(() => teamsApi.getTeams());
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<WorkItem | null>(null);
