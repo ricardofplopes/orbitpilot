@@ -56,6 +56,10 @@ export const teams = {
   removeMember: async (teamId: string, memberId: string) => {
     await client.delete(`/teams/${teamId}/members/${memberId}`);
   },
+  toggleMemberActive: async (teamId: string, memberId: string, isActive: boolean) => {
+    const { data } = await client.patch(`/teams/${teamId}/members/${memberId}`, { isActive });
+    return data;
+  },
 };
 
 // Capacity
@@ -113,11 +117,17 @@ export const planning = {
 
 // Work
 export const work = {
-  getWorkItems: async (filters?: { teamId?: string; status?: string; source?: string }) => {
+  getWorkItems: async (filters?: { teamId?: string; status?: string; source?: string; startDate?: string; endDate?: string; sprints?: string[] }) => {
     const params = new URLSearchParams();
     if (filters?.teamId) params.append('teamId', filters.teamId);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.source) params.append('source', filters.source);
+    if (filters?.sprints && filters.sprints.length > 0) {
+      params.append('sprints', filters.sprints.join(','));
+    } else {
+      if (filters?.startDate) params.append('startDate', filters.startDate);
+      if (filters?.endDate) params.append('endDate', filters.endDate);
+    }
     const { data } = await client.get<WorkItem[]>(`/work?${params.toString()}`);
     return data;
   },
@@ -212,9 +222,19 @@ export const insights = {
 
 // Dashboard
 export const dashboard = {
-  getDashboard: async (teamId?: string) => {
-    const params = teamId ? { teamId } : {};
+  getDashboard: async (teamId?: string, startDate?: string, endDate?: string, sprints?: string[]) => {
+    const params: any = {};
+    if (teamId) params.teamId = teamId;
+    if (sprints && sprints.length > 0) params.sprints = sprints.join(',');
+    else if (startDate) params.startDate = startDate;
+    if (!sprints?.length && endDate) params.endDate = endDate;
     const { data } = await client.get('/dashboard', { params });
+    return data;
+  },
+  getSprints: async (teamId?: string) => {
+    const params: any = {};
+    if (teamId) params.teamId = teamId;
+    const { data } = await client.get<Array<{ name: string; itemCount: number }>>('/dashboard/sprints', { params });
     return data;
   },
 };

@@ -73,6 +73,18 @@ export class TeamsService {
     return { deleted: true };
   }
 
+  async toggleMemberActive(teamId: string, memberId: string, isActive: boolean) {
+    const member = await this.prisma.teamMember.findFirst({
+      where: { id: memberId, teamId },
+    });
+    if (!member) throw new NotFoundException('Team member not found');
+    return this.prisma.teamMember.update({
+      where: { id: memberId },
+      data: { isActive },
+      include: { user: { select: { id: true, name: true, email: true } } },
+    });
+  }
+
   async getTeamWithMembers(teamId: string) {
     return this.findById(teamId);
   }
@@ -85,13 +97,11 @@ export class TeamsService {
     const team = await this.prisma.team.findUnique({ where: { id: teamId } });
     if (!team) throw new NotFoundException('Team not found');
 
-    // Get members with their user info
     const members = await this.prisma.teamMember.findMany({
       where: { teamId },
       include: { user: { select: { id: true, name: true, email: true } } },
     });
 
-    // For each member, get work item stats by matching assignee name
     const stats = await Promise.all(
       members.map(async (m) => {
         const userName = m.user.name;
@@ -114,6 +124,7 @@ export class TeamsService {
           email: m.user.email,
           role: m.role,
           weeklyCapacity: m.weeklyCapacity,
+          isActive: m.isActive,
           activeItems,
           doneItems,
           totalSp: totalSpResult._sum.storyPoints || 0,
@@ -121,7 +132,6 @@ export class TeamsService {
       })
     );
 
-    // Sort by active items descending
     return stats.sort((a, b) => b.activeItems - a.activeItems);
   }
 }

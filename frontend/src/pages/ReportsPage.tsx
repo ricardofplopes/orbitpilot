@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
 import { useApi } from '@/hooks/useApi';
 import { useTeam } from '@/context/TeamContext';
-import { reports, teams as teamsApi } from '@/api/services';
+import { reports, teams as teamsApi, dashboard as dashboardApi } from '@/api/services';
+import DateSprintFilter, { FilterState } from '@/components/filters/DateSprintFilter';
 import MetricCard from '@/components/cards/MetricCard';
 import Spinner from '@/components/common/Spinner';
 import ErrorState from '@/components/common/ErrorState';
@@ -16,18 +17,28 @@ const COLORS = ['#2563EB', '#7C3AED', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'
 const ReportsPage: React.FC = () => {
   const { selectedTeamId, selectedTeam } = useTeam();
   const [tab, setTab] = useState<'sprints' | 'team' | 'overall'>('sprints');
+  const [dateFilter, setDateFilter] = useState<FilterState>(null);
+  const [sprints, setSprints] = useState<Array<{ name: string; itemCount: number }>>([]);
+
+  useEffect(() => {
+    dashboardApi.getSprints(selectedTeamId || undefined).then(setSprints).catch(() => {});
+  }, [selectedTeamId]);
 
   const { data: overallData, loading, error, refetch } = useApi<any>(() => reports.getOverall());
   const { data: teamReport } = useApi<any>(
     () => selectedTeamId ? reports.getTeamReport(selectedTeamId) : Promise.resolve(null),
     [selectedTeamId]
   );
-  // Sprint data from dashboard endpoint (has velocity per sprint)
+  // Sprint data from dashboard endpoint with date filter applied
   const { data: sprintData } = useApi<any>(
-    () => selectedTeamId
-      ? client.get(`/dashboard?teamId=${selectedTeamId}`).then(r => r.data)
-      : Promise.resolve(null),
-    [selectedTeamId]
+    () => {
+      if (!selectedTeamId) return Promise.resolve(null);
+      const startDate = dateFilter?.mode === 'date' ? dateFilter.startDate : undefined;
+      const endDate = dateFilter?.mode === 'date' ? dateFilter.endDate : undefined;
+      const sprintFilter = dateFilter?.mode === 'sprint' ? dateFilter.sprints : undefined;
+      return dashboardApi.getDashboard(selectedTeamId, startDate, endDate, sprintFilter);
+    },
+    [selectedTeamId, dateFilter]
   );
 
   if (loading) return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
@@ -37,9 +48,12 @@ const ReportsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-orbit-light">Reports</h2>
-        <p className="text-sm text-orbit-slate mt-1">Analytics and insights across your team and sprints</p>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-orbit-light">Reports</h2>
+          <p className="text-sm text-orbit-slate mt-1">Analytics and insights across your team and sprints</p>
+        </div>
+        <DateSprintFilter value={dateFilter} onChange={setDateFilter} availableSprints={sprints} />
       </div>
 
       {/* Tab Selector */}

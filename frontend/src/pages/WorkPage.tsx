@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, ExternalLink, Pencil, Trash2 } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
-import { work, teams as teamsApi } from '@/api/services';
+import { work, teams as teamsApi, dashboard } from '@/api/services';
 import { useTeam } from '@/context/TeamContext';
+import DateSprintFilter, { FilterState } from '@/components/filters/DateSprintFilter';
 import Modal from '@/components/common/Modal';
 import Button from '@/components/common/Button';
 import Input from '@/components/common/Input';
@@ -34,8 +35,20 @@ const sourceIcon = (s: string) => {
 const WorkPage: React.FC = () => {
   const { selectedTeamId } = useTeam();
   const [filters, setFilters] = useState<{ teamId?: string; status?: string; source?: string }>({});
-  const effectiveFilters = { ...filters, teamId: filters.teamId || selectedTeamId || undefined };
-  const { data: items, loading, error, refetch } = useApi<WorkItem[]>(() => work.getWorkItems(effectiveFilters), [selectedTeamId, filters.teamId, filters.status, filters.source]);
+  const [dateFilter, setDateFilter] = useState<FilterState>(null);
+  const [sprints, setSprints] = useState<Array<{ name: string; itemCount: number }>>([]);
+
+  useEffect(() => {
+    dashboard.getSprints(selectedTeamId || undefined).then(setSprints).catch(() => {});
+  }, [selectedTeamId]);
+
+  const effectiveFilters = {
+    ...filters,
+    teamId: filters.teamId || selectedTeamId || undefined,
+    ...(dateFilter?.mode === 'sprint' ? { sprints: dateFilter.sprints } : {}),
+    ...(dateFilter?.mode === 'date' ? { startDate: dateFilter.startDate, endDate: dateFilter.endDate } : {}),
+  };
+  const { data: items, loading, error, refetch } = useApi<WorkItem[]>(() => work.getWorkItems(effectiveFilters), [selectedTeamId, filters.teamId, filters.status, filters.source, dateFilter]);
   const { data: teamsList } = useApi<Team[]>(() => teamsApi.getTeams());
   const [showCreate, setShowCreate] = useState(false);
   const [editItem, setEditItem] = useState<WorkItem | null>(null);
@@ -162,10 +175,7 @@ const WorkPage: React.FC = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-orbit-slate" />
           <input className="input pl-10" placeholder="Search work items..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <select className="input max-w-[180px]" value={filters.teamId || ''} onChange={(e) => setFilters({ ...filters, teamId: e.target.value || undefined })}>
-          <option value="">All Teams</option>
-          {teamsList?.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
+        <DateSprintFilter value={dateFilter} onChange={setDateFilter} availableSprints={sprints} />
         <select className="input max-w-[180px]" value={filters.status || ''} onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })}>
           <option value="">All Statuses</option>
           <option value="backlog">Backlog</option>

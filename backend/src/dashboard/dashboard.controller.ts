@@ -8,7 +8,18 @@ export class DashboardController {
   constructor(private dashboardService: DashboardService) {}
 
   @Get()
-  async getDashboard(@Query('teamId') teamId?: string) {
-    return this.dashboardService.getDashboardData(teamId);
+  async getDashboard(
+    @Query('teamId') teamId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('sprints') sprints?: string,
+  ) {
+    const sprintList = sprints ? sprints.split(',').filter(Boolean) : undefined;
+    return this.dashboardService.getDashboardData(teamId, startDate, endDate, sprintList);
+  }
+
+  @Get('sprints')
+  async getSprints(@Query('teamId') teamId?: string) {
+    return this.dashboardService.getAvailableSprints(teamId);
   }
 }

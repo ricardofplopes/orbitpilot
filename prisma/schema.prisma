@@ -41,6 +41,7 @@ model TeamMember {
   teamId         String         @map("team_id")
   role           String         @default("engineer")
   weeklyCapacity Float          @default(40) @map("weekly_capacity")
+  isActive       Boolean        @default(true) @map("is_active")
   user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   team           Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
   availability   Availability[]

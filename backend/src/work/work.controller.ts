@@ -26,11 +26,16 @@ export class WorkController {
     @Query('status') status?: string,
     @Query('source') source?: string,
     @Query('initiativeId') initiativeId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('sprints') sprints?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
+    const sprintList = sprints ? sprints.split(',').filter(Boolean) : undefined;
     return this.workService.findAll({
       teamId, status, source, initiativeId,
+      startDate, endDate, sprints: sprintList,
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
     });

@@ -11,6 +11,9 @@ export class WorkService {
     status?: string;
     source?: string;
     initiativeId?: string;
+    startDate?: string;
+    endDate?: string;
+    sprints?: string[];
     limit?: number;
     offset?: number;
   }) {
@@ -19,6 +22,14 @@ export class WorkService {
     if (filters?.status) where.status = filters.status;
     if (filters?.source) where.source = filters.source;
     if (filters?.initiativeId) where.initiativeId = filters.initiativeId;
+
+    if (filters?.sprints && filters.sprints.length > 0) {
+      where.sprint = { in: filters.sprints };
+    } else if (filters?.startDate || filters?.endDate) {
+      where.updatedAt = {};
+      if (filters.startDate) where.updatedAt.gte = new Date(filters.startDate);
+      if (filters.endDate) where.updatedAt.lte = new Date(filters.endDate);
+    }
 
     const take = filters?.limit || 100;
     const skip = filters?.offset || 0;

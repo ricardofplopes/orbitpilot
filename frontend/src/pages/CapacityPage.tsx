@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Plus, Users } from 'lucide-react';
 import { useApi } from '@/hooks/useApi';
-import { capacity, teams as teamsApi } from '@/api/services';
+import { capacity, teams as teamsApi, dashboard as dashboardApi } from '@/api/services';
 import { useTeam } from '@/context/TeamContext';
+import DateSprintFilter, { FilterState } from '@/components/filters/DateSprintFilter';
 import CapacityChart from '@/components/charts/CapacityChart';
 import Modal from '@/components/common/Modal';
 import Button from '@/components/common/Button';
@@ -14,9 +15,19 @@ import type { Team, TeamMember } from '@/types';
 
 const CapacityPage: React.FC = () => {
   const { selectedTeamId, selectedTeam } = useTeam();
+  const [dateFilter, setDateFilter] = useState<FilterState>(null);
+  const [sprints, setSprints] = useState<Array<{ name: string; itemCount: number }>>([]);
+
+  useEffect(() => {
+    dashboardApi.getSprints(selectedTeamId || undefined).then(setSprints).catch(() => {});
+  }, [selectedTeamId]);
+
+  const startDate = dateFilter?.mode === 'date' ? dateFilter.startDate : undefined;
+  const endDate = dateFilter?.mode === 'date' ? dateFilter.endDate : undefined;
+
   const { data: capData, loading, error, refetch } = useApi(
-    () => selectedTeamId ? capacity.getTeamCapacity(selectedTeamId) : capacity.getSummary(),
-    [selectedTeamId]
+    () => selectedTeamId ? capacity.getTeamCapacity(selectedTeamId, startDate, endDate) : capacity.getSummary(startDate, endDate),
+    [selectedTeamId, dateFilter]
   );
   const { data: teamsList } = useApi<Team[]>(() => teamsApi.getTeams());
   const [showPtoModal, setShowPtoModal] = useState(false);
@@ -97,6 +108,7 @@ const CapacityPage: React.FC = () => {
           <p className="text-sm text-orbit-slate mt-1">Monitor team capacity and availability</p>
         </div>
         <div className="flex items-center gap-3">
+          <DateSprintFilter value={dateFilter} onChange={setDateFilter} availableSprints={sprints} />
           <Button variant="secondary" onClick={() => setShowPeriodModal(true)}>
             <Calendar className="w-4 h-4" /> New Period
           </Button>

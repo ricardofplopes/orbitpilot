@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Activity, Target, AlertTriangle, Clock, CheckCircle2, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useApi } from '@/hooks/useApi';
 import { dashboard } from '@/api/services';
 import { useTeam } from '@/context/TeamContext';
+import DateSprintFilter, { FilterState } from '@/components/filters/DateSprintFilter';
 import MetricCard from '@/components/cards/MetricCard';
 import InsightCard from '@/components/cards/InsightCard';
 import Badge from '@/components/common/Badge';
@@ -13,9 +14,24 @@ import EmptyState from '@/components/common/EmptyState';
 
 const DashboardPage: React.FC = () => {
   const { selectedTeamId, selectedTeam } = useTeam();
+  const [filter, setFilter] = useState<FilterState>(null);
+  const [sprints, setSprints] = useState<Array<{ name: string; itemCount: number }>>([]);
+
+  // Fetch available sprints
+  useEffect(() => {
+    dashboard.getSprints(selectedTeamId || undefined).then(setSprints).catch(() => {});
+  }, [selectedTeamId]);
+
+  const getFilterParams = () => {
+    if (!filter) return { teamId: selectedTeamId || undefined };
+    if (filter.mode === 'sprint') return { teamId: selectedTeamId || undefined, sprints: filter.sprints };
+    return { teamId: selectedTeamId || undefined, startDate: filter.startDate, endDate: filter.endDate };
+  };
+
+  const filterParams = getFilterParams();
   const { data, loading, error, refetch } = useApi<any>(
-    () => dashboard.getDashboard(selectedTeamId || undefined),
-    [selectedTeamId]
+    () => dashboard.getDashboard(filterParams.teamId, (filterParams as any).startDate, (filterParams as any).endDate, (filterParams as any).sprints),
+    [selectedTeamId, filter]
   );
 
   if (loading) {
@@ -44,10 +60,13 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Team name */}
-      <div>
-        <p className="text-sm text-orbit-slate">Dashboard for</p>
-        <h2 className="text-2xl font-bold text-orbit-light">{selectedTeam?.name || 'Team'}</h2>
+      {/* Header with filter */}
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <p className="text-sm text-orbit-slate">Dashboard for</p>
+          <h2 className="text-2xl font-bold text-orbit-light">{selectedTeam?.name || 'Team'}</h2>
+        </div>
+        <DateSprintFilter value={filter} onChange={setFilter} availableSprints={sprints} />
       </div>
 
       {/* Metric Cards */}
