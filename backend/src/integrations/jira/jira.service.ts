@@ -323,12 +323,12 @@ export class JiraService {
       jql = cfg.syncJql;
     } else if (projectKey) {
       // Scope to sprint-associated issues only (board items) + recent updates
-      jql = `project = "${projectKey}" AND sprint is not EMPTY AND updated >= -26w ORDER BY updated DESC`;
+      jql = `project = "${projectKey}" AND sprint is not EMPTY AND updated >= -104w ORDER BY updated DESC`;
     } else {
-      jql = 'updated >= -26w ORDER BY updated DESC';
+      jql = 'updated >= -104w ORDER BY updated DESC';
     }
 
-    const maxIssuesLimit = cfg.maxIssues || 2000;
+    const maxIssuesLimit = cfg.maxIssues || 5000;
     const pageSize = 100;
     let nextPageToken: string | null = null;
     let synced = 0;

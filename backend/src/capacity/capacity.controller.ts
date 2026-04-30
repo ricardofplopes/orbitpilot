@@ -35,6 +35,15 @@ export class CapacityController {
     return this.capacityService.calculateTeamCapacity(teamId, start, end);
   }
 
+  @Get('team/:teamId/velocity')
+  async getTeamVelocity(
+    @Param('teamId') teamId: string,
+    @Query('sprintCount') sprintCount: string,
+  ) {
+    const count = sprintCount ? parseInt(sprintCount, 10) : 6;
+    return this.capacityService.getVelocityCapacity(teamId, count);
+  }
+
   @Post('availability')
   async setAvailability(@Body() dto: SetAvailabilityDto) {
     return this.capacityService.setAvailability(dto);

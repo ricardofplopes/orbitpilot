@@ -148,4 +148,123 @@ export class CapacityService {
       };
     });
   }
+
+  /** Velocity-based capacity: SP/sprint from past closed sprints */
+  async getVelocityCapacity(teamId: string, sprintCount: number = 6) {
+    const SPRINT_PATTERN = /^(BV BO|VBO)[\s-]/i;
+
+    // Get active team members' emails/names for filtering
+    const members = await this.prisma.teamMember.findMany({
+      where: { teamId, isActive: true },
+      include: { user: { select: { name: true, email: true } } },
+    });
+
+    const memberEmails = members.map(m => m.user.email).filter(Boolean);
+    const memberNames = members.map(m => m.user.name).filter(Boolean);
+
+    // Get all work items with sprints matching BO pattern, assigned to team members
+    const workItems = await this.prisma.workItem.findMany({
+      where: {
+        sprint: { not: null },
+        source: 'jira',
+        OR: [
+          { assigneeEmail: { in: memberEmails } },
+          { assignee: { in: memberNames } },
+        ],
+      },
+      select: {
+        sprint: true,
+        storyPoints: true,
+        status: true,
+        assignee: true,
+        assigneeEmail: true,
+      },
+    });
+
+    // Filter to BO sprints only
+    const boItems = workItems.filter(w => w.sprint && SPRINT_PATTERN.test(w.sprint));
+
+    // Group by sprint
+    const sprintMap = new Map<string, typeof boItems>();
+    for (const item of boItems) {
+      const s = item.sprint!;
+      if (!sprintMap.has(s)) sprintMap.set(s, []);
+      sprintMap.get(s)!.push(item);
+    }
+
+    // Sort sprints descending (most recent first)
+    const allSprints = Array.from(sprintMap.keys()).sort((a, b) => b.localeCompare(a));
+
+    // Detect active sprint: the most recent one that has non-done items
+    // For velocity, we skip the active sprint and use the N closed ones after it
+    let activeSprint: string | null = null;
+    for (const s of allSprints) {
+      const items = sprintMap.get(s)!;
+      const hasPending = items.some(i => i.status !== 'done' && i.status !== 'cancelled');
+      if (hasPending) {
+        activeSprint = s;
+        break;
+      }
+    }
+
+    // Closed sprints = all except the active one
+    const closedSprints = allSprints.filter(s => s !== activeSprint);
+    const velocitySprints = closedSprints.slice(0, sprintCount);
+
+    // Calculate velocity per sprint
+    const sprintVelocity = velocitySprints.map(s => {
+      const items = sprintMap.get(s)!;
+      const totalSP = items.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+      const itemCount = items.length;
+      return { sprint: s, storyPoints: totalSP, itemCount };
+    });
+
+    const avgVelocity = sprintVelocity.length > 0
+      ? Math.round(sprintVelocity.reduce((sum, s) => sum + s.storyPoints, 0) / sprintVelocity.length)
+      : 0;
+
+    // Committed SP: items in active/future sprints that are not done
+    const committedItems = activeSprint
+      ? (sprintMap.get(activeSprint) || []).filter(i => i.status !== 'done' && i.status !== 'cancelled')
+      : [];
+    const committedSP = committedItems.reduce((sum, i) => sum + (i.storyPoints || 0), 0);
+
+    // Per-member velocity (from closed sprints used for velocity)
+    const memberVelocityMap = new Map<string, { name: string; totalSP: number; sprintCount: number }>();
+    for (const s of velocitySprints) {
+      const items = sprintMap.get(s)!;
+      for (const item of items) {
+        const key = item.assigneeEmail || item.assignee || 'Unassigned';
+        const name = item.assignee || item.assigneeEmail || 'Unassigned';
+        if (!memberVelocityMap.has(key)) {
+          memberVelocityMap.set(key, { name, totalSP: 0, sprintCount: 0 });
+        }
+        const mv = memberVelocityMap.get(key)!;
+        mv.totalSP += item.storyPoints || 0;
+      }
+    }
+    // Set sprint count for each member (they participated in some of the sprints)
+    for (const mv of memberVelocityMap.values()) {
+      mv.sprintCount = velocitySprints.length;
+    }
+
+    const memberVelocity = Array.from(memberVelocityMap.values())
+      .map(mv => ({
+        name: mv.name,
+        totalSP: mv.totalSP,
+        avgSPPerSprint: mv.sprintCount > 0 ? Math.round((mv.totalSP / mv.sprintCount) * 10) / 10 : 0,
+      }))
+      .sort((a, b) => b.totalSP - a.totalSP);
+
+    return {
+      teamId,
+      sprintCount: velocitySprints.length,
+      avgVelocity,
+      committedSP,
+      activeSprint,
+      capacityDelta: avgVelocity - committedSP, // positive = under capacity, negative = over
+      sprintVelocity: sprintVelocity.reverse(), // chronological order for chart
+      memberVelocity,
+    };
+  }
 }
