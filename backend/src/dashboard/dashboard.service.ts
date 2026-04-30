@@ -1,6 +1,22 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+/** Extract year and sprint number for sorting. Returns [year, number] or [0, 0] if no match. */
+function parseSprintNumber(name: string): [number, number] {
+  // Matches "BV BO 2026.8", "BV BO Sprint 2024.5", "VBO 2026.8", "VBO-2026.8"
+  const m = name.match(/(\d{4})[.\-](\d+)\s*$/);
+  if (m) return [parseInt(m[1]), parseInt(m[2])];
+  return [0, 0];
+}
+
+/** Sort sprints descending by year then number */
+function sprintSortDesc(a: string, b: string): number {
+  const [aYear, aNum] = parseSprintNumber(a);
+  const [bYear, bNum] = parseSprintNumber(b);
+  if (bYear !== aYear) return bYear - aYear;
+  return bNum - aNum;
+}
+
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
@@ -82,7 +98,7 @@ export class DashboardService {
         storyPoints: s._sum.storyPoints || 0,
         itemCount: s._count,
       }))
-      .sort((a, b) => b.sprint.localeCompare(a.sprint))
+      .sort((a, b) => sprintSortDesc(a.sprint, b.sprint))
       .slice(0, 20);
 
     // Filter memberWorkload to only show active team members
@@ -143,7 +159,7 @@ export class DashboardService {
       .filter(s => s.sprint)
       .filter(s => /^(BV BO|VBO)\s/i.test(s.sprint!))
       .map(s => ({ name: s.sprint!, itemCount: s._count }))
-      .sort((a, b) => b.name.localeCompare(a.name))
+      .sort((a, b) => sprintSortDesc(a.name, b.name))
       .slice(0, 30);
   }
 }

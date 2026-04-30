@@ -3,6 +3,20 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreatePeriodDto } from './dto/create-period.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
 
+/** Extract year and sprint number for sorting */
+function parseSprintNumber(name: string): [number, number] {
+  const m = name.match(/(\d{4})[.\-](\d+)\s*$/);
+  if (m) return [parseInt(m[1]), parseInt(m[2])];
+  return [0, 0];
+}
+
+function sprintSortDesc(a: string, b: string): number {
+  const [aYear, aNum] = parseSprintNumber(a);
+  const [bYear, bNum] = parseSprintNumber(b);
+  if (bYear !== aYear) return bYear - aYear;
+  return bNum - aNum;
+}
+
 @Injectable()
 export class CapacityService {
   constructor(private prisma: PrismaService) {}
@@ -193,7 +207,7 @@ export class CapacityService {
     }
 
     // Sort sprints descending (most recent first)
-    const allSprints = Array.from(sprintMap.keys()).sort((a, b) => b.localeCompare(a));
+    const allSprints = Array.from(sprintMap.keys()).sort((a, b) => sprintSortDesc(a, b));
 
     // Detect active sprint: the most recent one that has non-done items
     // For velocity, we skip the active sprint and use the N closed ones after it
