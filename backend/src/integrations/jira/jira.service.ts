@@ -336,6 +336,10 @@ export class JiraService {
 
     this.logger.log(`Starting Jira sync. JQL: ${jql}, maxIssues: ${maxIssuesLimit}`);
 
+    // Clear previous synced data to ensure fresh state
+    const deleted = await this.prisma.workItem.deleteMany({ where: { source: 'jira' } });
+    this.logger.log(`Cleared ${deleted.count} previous Jira items`);
+
     do {
       const fields = 'summary,status,priority,assignee,issuetype,customfield_10016,customfield_10020,fixVersions,created,updated';
       const params = new URLSearchParams({ jql, fields, maxResults: pageSize.toString() });
