@@ -7,6 +7,7 @@ import Spinner from '@/components/common/Spinner';
 import LoginPage from '@/pages/LoginPage';
 import DashboardPage from '@/pages/DashboardPage';
 import CapacityPage from '@/pages/CapacityPage';
+import CalendarPage from '@/pages/CalendarPage';
 import PlanningPage from '@/pages/PlanningPage';
 import TeamsPage from '@/pages/TeamsPage';
 import PeoplePage from '@/pages/PeoplePage';
@@ -59,6 +60,7 @@ const AppRoutes: React.FC = () => {
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/capacity" element={<CapacityPage />} />
+                <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/planning" element={<PlanningPage />} />
                 <Route path="/teams" element={<TeamsPage />} />
                 <Route path="/people" element={<PeoplePage />} />

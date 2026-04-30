@@ -82,12 +82,20 @@ export const capacity = {
     const { data } = await client.get(`/capacity/team/${teamId}/velocity?sprintCount=${sprintCount}`);
     return data;
   },
+  getTeamAvailability: async (teamId: string, start: string, end: string) => {
+    const { data } = await client.get(`/capacity/team/${teamId}/availability?start=${start}&end=${end}`);
+    return data;
+  },
   createPeriod: async (payload: Partial<CapacityPeriod>) => {
     const { data } = await client.post<CapacityPeriod>('/capacity/periods', payload);
     return data;
   },
   setAvailability: async (payload: Partial<Availability>) => {
     const { data } = await client.post<Availability>('/capacity/availability', payload);
+    return data;
+  },
+  deleteAvailability: async (id: string) => {
+    const { data } = await client.post(`/capacity/availability/${id}/delete`);
     return data;
   },
 };

@@ -49,6 +49,20 @@ export class CapacityController {
     return this.capacityService.setAvailability(dto);
   }
 
+  @Get('team/:teamId/availability')
+  async getTeamAvailability(
+    @Param('teamId') teamId: string,
+    @Query('start') start: string,
+    @Query('end') end: string,
+  ) {
+    return this.capacityService.getTeamAvailability(teamId, start, end);
+  }
+
+  @Post('availability/:id/delete')
+  async deleteAvailability(@Param('id') id: string) {
+    return this.capacityService.deleteAvailability(id);
+  }
+
   @Get('availability/:teamMemberId')
   async getAvailability(
     @Param('teamMemberId') teamMemberId: string,

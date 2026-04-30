@@ -59,6 +59,52 @@ export class CapacityService {
     });
   }
 
+  async deleteAvailability(id: string) {
+    await this.prisma.availability.delete({ where: { id } });
+    return { success: true };
+  }
+
+  /** Get all PTO/availability entries for a team in a date range */
+  async getTeamAvailability(teamId: string, startDate: string, endDate: string) {
+    const start = startDate ? new Date(startDate) : new Date();
+    const end = endDate ? new Date(endDate) : new Date(start.getFullYear(), start.getMonth() + 1, 0);
+
+    const members = await this.prisma.teamMember.findMany({
+      where: { teamId, isActive: true },
+      include: {
+        user: { select: { name: true } },
+        availability: {
+          where: { date: { gte: start, lte: end } },
+          orderBy: { date: 'asc' },
+        },
+      },
+    });
+
+    const entries: Array<{
+      id: string;
+      memberId: string;
+      memberName: string;
+      date: string;
+      type: string;
+      hours: number;
+    }> = [];
+
+    for (const m of members) {
+      for (const a of m.availability) {
+        entries.push({
+          id: a.id,
+          memberId: m.id,
+          memberName: m.user.name,
+          date: a.date.toISOString().split('T')[0],
+          type: a.type,
+          hours: a.hours,
+        });
+      }
+    }
+
+    return entries;
+  }
+
   async calculateTeamCapacity(teamId: string, startDate?: string, endDate?: string) {
     // Default to current quarter if no dates provided
     const now = new Date();

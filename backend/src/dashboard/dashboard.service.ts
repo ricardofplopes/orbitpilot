@@ -35,6 +35,12 @@ export class DashboardService {
     }
 
     const where = { ...teamFilter, ...dateFilter };
+    // Sprint velocity should NOT be filtered by date — sprints are their own time boundary
+    const sprintWhere = { ...teamFilter, sprint: { not: null } };
+    // If sprint filter is active, use it for sprint data too
+    if (sprints && sprints.length > 0) {
+      (sprintWhere as any).sprint = { in: sprints };
+    }
 
     const [
       workByStatusRaw,
@@ -66,7 +72,7 @@ export class DashboardService {
       }),
       this.prisma.workItem.groupBy({
         by: ['sprint'],
-        where: { ...where, sprint: { not: null } },
+        where: sprintWhere,
         _sum: { storyPoints: true },
         _count: true,
       }),

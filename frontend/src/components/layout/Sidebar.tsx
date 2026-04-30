@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   BarChart3,
   Calendar,
+  CalendarDays,
   Users,
   ListChecks,
   LineChart,
@@ -15,6 +16,7 @@ import {
 const navItems = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/capacity', label: 'Capacity', icon: BarChart3 },
+  { to: '/calendar', label: 'Calendar', icon: CalendarDays },
   { to: '/planning', label: 'Plan', icon: Calendar },
   { to: '/teams', label: 'Teams', icon: Users },
   { to: '/work', label: 'Work', icon: ListChecks },
