@@ -10,6 +10,10 @@ import type {
   WorkItem,
   Insight,
   DashboardData,
+  EpicPlan,
+  QuarterImpact,
+  JiraField,
+  JiraFieldMapping,
 } from '@/types';
 
 // Auth
@@ -125,6 +129,19 @@ export const planning = {
   deleteInitiative: async (id: string) => {
     await client.delete(`/planning/initiatives/${id}`);
   },
+  // Epic-based planning
+  getEpicQuarters: async () => {
+    const { data } = await client.get<string[]>('/planning/epic-quarters');
+    return data;
+  },
+  getEpicsByQuarter: async (quarter: string) => {
+    const { data } = await client.get<EpicPlan[]>(`/planning/epic-quarter/${encodeURIComponent(quarter)}/epics`);
+    return data;
+  },
+  getQuarterImpact: async (quarter: string) => {
+    const { data } = await client.get<QuarterImpact>(`/planning/epic-quarter/${encodeURIComponent(quarter)}/impact`);
+    return data;
+  },
 };
 
 // Work
@@ -214,6 +231,18 @@ export const integrations = {
     const { data } = await client.post('/integrations/jira/sync-settings', settings);
     return data;
   },
+  getJiraFields: async () => {
+    const { data } = await client.get<JiraField[]>('/integrations/jira/fields');
+    return data;
+  },
+  getJiraFieldMapping: async () => {
+    const { data } = await client.get<JiraFieldMapping>('/integrations/jira/field-mapping');
+    return data;
+  },
+  updateJiraFieldMapping: async (mapping: JiraFieldMapping) => {
+    const { data } = await client.post<{ success: boolean; fieldMapping: JiraFieldMapping }>('/integrations/jira/field-mapping', mapping);
+    return data;
+  },
   getGithubConfig: async () => {
     const { data } = await client.get('/integrations/github/config');
     return data;
@@ -255,6 +284,18 @@ export const dashboard = {
     const params: any = {};
     if (teamId) params.teamId = teamId;
     const { data } = await client.get<Array<{ name: string; itemCount: number }>>('/dashboard/sprints', { params });
+    return data;
+  },
+};
+
+// App settings (t-shirt size mapping)
+export const settings = {
+  getTShirtMap: async () => {
+    const { data } = await client.get<Record<string, number>>('/settings/tshirt-map');
+    return data;
+  },
+  updateTShirtMap: async (map: Record<string, number>) => {
+    const { data } = await client.put<Record<string, number>>('/settings/tshirt-map', map);
     return data;
   },
 };

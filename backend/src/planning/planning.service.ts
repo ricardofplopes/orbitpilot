@@ -2,10 +2,50 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateQuarterDto, UpdateQuarterDto } from './dto/create-quarter.dto';
 import { CreateInitiativeDto, UpdateInitiativeDto } from './dto/create-initiative.dto';
+import { SettingsService } from '../settings/settings.service';
+
+/** Parse a quarter label like "Q3 2026" / "FY26 Q3" / "2026 Q3" into {year, quarter} for sorting */
+function parseQuarter(label: string): { year: number; quarter: number } | null {
+  if (!label) return null;
+  const s = label.toUpperCase().trim();
+  // Match "Q3 2026" or "Q3-2026"
+  let m = s.match(/Q\s*(\d)\D+(\d{2,4})/);
+  if (m) {
+    let y = parseInt(m[2], 10);
+    if (y < 100) y += 2000;
+    return { year: y, quarter: parseInt(m[1], 10) };
+  }
+  // Match "2026 Q3" or "2026-Q3"
+  m = s.match(/(\d{4}).*?Q\s*(\d)/);
+  if (m) return { year: parseInt(m[1], 10), quarter: parseInt(m[2], 10) };
+  // Match "FY26 Q3"
+  m = s.match(/FY\s*(\d{2,4}).*?Q\s*(\d)/);
+  if (m) {
+    let y = parseInt(m[1], 10);
+    if (y < 100) y += 2000;
+    return { year: y, quarter: parseInt(m[2], 10) };
+  }
+  return null;
+}
+
+function sortQuartersDesc(a: string, b: string): number {
+  const pa = parseQuarter(a);
+  const pb = parseQuarter(b);
+  if (pa && pb) {
+    if (pa.year !== pb.year) return pb.year - pa.year;
+    return pb.quarter - pa.quarter;
+  }
+  if (pa) return -1;
+  if (pb) return 1;
+  return b.localeCompare(a);
+}
 
 @Injectable()
 export class PlanningService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private settings: SettingsService,
+  ) {}
 
   async getQuarterPlans() {
     return this.prisma.quarterPlan.findMany({
@@ -166,5 +206,105 @@ export class PlanningService {
     });
 
     return { quarterPlanId, planName: plan.name, teams: impact };
+  }
+
+  // ===== Epic-based planning (replaces Initiative concept) =====
+
+  /** Get distinct quarter values from synced epics, sorted most-recent first */
+  async getEpicQuarters(): Promise<string[]> {
+    const rows = await this.prisma.workItem.findMany({
+      where: { source: 'jira', type: 'Epic', quarter: { not: null } },
+      select: { quarter: true },
+      distinct: ['quarter'],
+    });
+    const quarters = rows.map((r) => r.quarter!).filter(Boolean);
+    quarters.sort(sortQuartersDesc);
+    return quarters;
+  }
+
+  /** Get all epics for a given quarter, plus child issue rollup */
+  async getEpicsByQuarter(quarter: string) {
+    const epics = await this.prisma.workItem.findMany({
+      where: { source: 'jira', type: 'Epic', quarter },
+      include: { team: { select: { id: true, name: true, color: true } } },
+      orderBy: { externalId: 'asc' },
+    });
+
+    if (epics.length === 0) return [];
+
+    const epicKeys = epics.map((e) => e.externalId).filter(Boolean) as string[];
+    // Aggregate child issues per epic
+    const children = await this.prisma.workItem.findMany({
+      where: { source: 'jira', epicKey: { in: epicKeys } },
+      select: { epicKey: true, status: true, storyPoints: true },
+    });
+
+    const childStats = new Map<string, { total: number; done: number; sp: number; doneSp: number }>();
+    for (const c of children) {
+      if (!c.epicKey) continue;
+      const s = childStats.get(c.epicKey) || { total: 0, done: 0, sp: 0, doneSp: 0 };
+      s.total += 1;
+      s.sp += c.storyPoints || 0;
+      if (c.status === 'done') {
+        s.done += 1;
+        s.doneSp += c.storyPoints || 0;
+      }
+      childStats.set(c.epicKey, s);
+    }
+
+    const tShirtMap = await this.settings.getTShirtMap();
+
+    return epics.map((e) => {
+      const stats = (e.externalId && childStats.get(e.externalId)) || { total: 0, done: 0, sp: 0, doneSp: 0 };
+      const sizedSp = e.tShirtSize ? (tShirtMap[e.tShirtSize.toUpperCase()] ?? null) : null;
+      return {
+        id: e.id,
+        key: e.externalId,
+        title: e.title,
+        status: e.status,
+        priority: e.priority,
+        team: e.team,
+        teamId: e.teamId,
+        tShirtSize: e.tShirtSize,
+        sizedStoryPoints: sizedSp,
+        storyPoints: e.storyPoints,
+        quarter: e.quarter,
+        externalUrl: e.externalUrl,
+        children: stats,
+      };
+    });
+  }
+
+  /** Capacity impact for a given quarter using t-shirt SP map */
+  async getQuarterImpact(quarter: string) {
+    const epics = await this.getEpicsByQuarter(quarter);
+    const tShirtMap = await this.settings.getTShirtMap();
+
+    const teamTotals = new Map<string, { teamId: string; teamName: string; color?: string; estimatedSp: number; epicCount: number; unsizedCount: number }>();
+    let totalSp = 0;
+    let unsizedCount = 0;
+
+    for (const e of epics) {
+      const sp = e.tShirtSize ? (tShirtMap[e.tShirtSize.toUpperCase()] ?? 0) : 0;
+      if (!e.tShirtSize) unsizedCount += 1;
+      totalSp += sp;
+
+      const tid = e.teamId || 'unassigned';
+      const tname = e.team?.name || 'Unassigned';
+      const existing = teamTotals.get(tid) || { teamId: tid, teamName: tname, color: e.team?.color || undefined, estimatedSp: 0, epicCount: 0, unsizedCount: 0 };
+      existing.estimatedSp += sp;
+      existing.epicCount += 1;
+      if (!e.tShirtSize) existing.unsizedCount += 1;
+      teamTotals.set(tid, existing);
+    }
+
+    return {
+      quarter,
+      epicCount: epics.length,
+      unsizedCount,
+      totalEstimatedSp: totalSp,
+      tShirtMap,
+      teams: Array.from(teamTotals.values()).sort((a, b) => b.estimatedSp - a.estimatedSp),
+    };
   }
 }

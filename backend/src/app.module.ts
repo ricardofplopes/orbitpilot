@@ -12,6 +12,7 @@ import { GithubModule } from './integrations/github/github.module';
 import { InsightsModule } from './insights/insights.module';
 import { ReportsModule } from './reports/reports.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { SettingsModule } from './settings/settings.module';
 import { HealthController } from './common/health.controller';
 
 @Module({
@@ -29,6 +30,7 @@ import { HealthController } from './common/health.controller';
     InsightsModule,
     ReportsModule,
     DashboardModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
 })

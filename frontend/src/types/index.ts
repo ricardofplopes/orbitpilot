@@ -104,3 +104,43 @@ export interface DashboardData {
   topPriorities: Initiative[];
   insights: Insight[];
 }
+
+
+export interface EpicPlan {
+  id: string;
+  key: string | null;
+  title: string;
+  status: string;
+  priority?: string | null;
+  team?: { id: string; name: string; color?: string } | null;
+  teamId?: string | null;
+  tShirtSize: string | null;
+  sizedStoryPoints: number | null;
+  storyPoints: number | null;
+  quarter: string | null;
+  externalUrl?: string | null;
+  children: { total: number; done: number; sp: number; doneSp: number };
+}
+
+export interface QuarterImpact {
+  quarter: string;
+  epicCount: number;
+  unsizedCount: number;
+  totalEstimatedSp: number;
+  tShirtMap: Record<string, number>;
+  teams: Array<{ teamId: string; teamName: string; color?: string; estimatedSp: number; epicCount: number; unsizedCount: number }>;
+}
+
+export interface JiraField {
+  id: string;
+  name: string;
+  custom: boolean;
+}
+
+export interface JiraFieldMapping {
+  storyPoints?: string;
+  sprint?: string;
+  epicLink?: string;
+  tShirtSize?: string;
+  quarter?: string;
+}

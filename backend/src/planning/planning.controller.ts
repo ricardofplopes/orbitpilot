@@ -50,4 +50,21 @@ export class PlanningController {
   async deleteInitiative(@Param('id') id: string) {
     return this.planningService.deleteInitiative(id);
   }
+
+  // ===== Epic-based planning routes =====
+
+  @Get('epic-quarters')
+  async getEpicQuarters() {
+    return this.planningService.getEpicQuarters();
+  }
+
+  @Get('epic-quarter/:quarter/epics')
+  async getEpicsByQuarter(@Param('quarter') quarter: string) {
+    return this.planningService.getEpicsByQuarter(decodeURIComponent(quarter));
+  }
+
+  @Get('epic-quarter/:quarter/impact')
+  async getQuarterImpact(@Param('quarter') quarter: string) {
+    return this.planningService.getQuarterImpact(decodeURIComponent(quarter));
+  }
 }

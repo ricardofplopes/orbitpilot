@@ -122,6 +122,9 @@ model WorkItem {
   teamId        String?     @map("team_id")
   initiativeId  String?     @map("initiative_id")
   cycleTime     Float?      @map("cycle_time")
+  tShirtSize    String?     @map("t_shirt_size")
+  quarter       String?
+  epicKey       String?     @map("epic_key")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
   team          Team?       @relation(fields: [teamId], references: [id])
@@ -132,6 +135,8 @@ model WorkItem {
   @@index([status])
   @@index([assignee])
   @@index([initiativeId])
+  @@index([epicKey])
+  @@index([quarter])
   @@map("work_items")
 }
 

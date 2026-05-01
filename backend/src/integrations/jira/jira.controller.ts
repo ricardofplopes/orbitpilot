@@ -118,4 +118,22 @@ export class JiraController {
   async getEpics() {
     return this.jiraService.getEpics();
   }
+
+  @Get('fields')
+  @UseGuards(JwtAuthGuard)
+  async getFields() {
+    return this.jiraService.getFields();
+  }
+
+  @Get('field-mapping')
+  @UseGuards(JwtAuthGuard)
+  async getFieldMapping() {
+    return this.jiraService.getFieldMapping();
+  }
+
+  @Post('field-mapping')
+  @UseGuards(JwtAuthGuard)
+  async updateFieldMapping(@Body() body: Record<string, string>) {
+    return this.jiraService.updateFieldMapping(body);
+  }
 }

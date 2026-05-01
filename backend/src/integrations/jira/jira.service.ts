@@ -272,6 +272,58 @@ export class JiraService {
     }
   }
 
+  /** Get available Jira custom fields (for field mapping) */
+  async getFields(): Promise<Array<{ id: string; name: string; custom: boolean }>> {
+    const auth = await this.getAuthHeaders();
+    if (!auth) throw new BadRequestException('Jira is not connected');
+    try {
+      const res = await fetch(`${auth.baseUrl}/rest/api/3/field`, { headers: auth.headers });
+      if (!res.ok) {
+        this.logger.error(`Failed to fetch Jira fields: ${res.status}`);
+        throw new BadRequestException(`Jira API error: ${res.status}`);
+      }
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []).map((f: any) => ({
+        id: f.id,
+        name: f.name,
+        custom: !!f.custom,
+      }));
+    } catch (err: any) {
+      this.logger.error(`Failed to fetch Jira fields: ${err.message}`);
+      throw new BadRequestException(`Jira API error: ${err.message}`);
+    }
+  }
+
+  /** Get the persisted field mapping (with defaults) */
+  async getFieldMapping(): Promise<Record<string, string>> {
+    const config = await this.prisma.integrationConfig.findFirst({ where: { type: 'jira' } });
+    const cfg = (config?.config as any) || {};
+    const mapping = cfg.fieldMapping || {};
+    return {
+      storyPoints: mapping.storyPoints || 'customfield_10034',
+      sprint: mapping.sprint || 'customfield_10020',
+      epicLink: mapping.epicLink || 'customfield_10014',
+      tShirtSize: mapping.tShirtSize || '',
+      quarter: mapping.quarter || '',
+    };
+  }
+
+  /** Update the field mapping */
+  async updateFieldMapping(mapping: Record<string, string>) {
+    const existing = await this.prisma.integrationConfig.findFirst({ where: { type: 'jira' } });
+    if (!existing) throw new BadRequestException('Jira is not connected');
+    const cfg = (existing.config as any) || {};
+    cfg.fieldMapping = {
+      ...(cfg.fieldMapping || {}),
+      ...mapping,
+    };
+    await this.prisma.integrationConfig.update({
+      where: { id: existing.id },
+      data: { config: cfg as any },
+    });
+    return { success: true, fieldMapping: cfg.fieldMapping };
+  }
+
   /** Save the selected project key to sync */
   async setProject(projectKey: string) {
     const existing = await this.prisma.integrationConfig.findFirst({ where: { type: 'jira' } });
@@ -316,14 +368,20 @@ export class JiraService {
 
     const projectKey = auth.config.projectKey;
     const cfg = auth.config;
+    const fieldMap = await this.getFieldMapping();
+    const fSP = fieldMap.storyPoints;
+    const fSprint = fieldMap.sprint;
+    const fEpicLink = fieldMap.epicLink;
+    const fTShirt = fieldMap.tShirtSize;
+    const fQuarter = fieldMap.quarter;
 
     // Build JQL: use custom syncJql if set, otherwise default with board sprint scoping
     let jql: string;
     if (cfg.syncJql) {
       jql = cfg.syncJql;
     } else if (projectKey) {
-      // Scope to sprint-associated issues only (board items) + recent updates
-      jql = `project = "${projectKey}" AND sprint is not EMPTY AND updated >= -104w ORDER BY updated DESC`;
+      // Include sprint-associated issues + ALL epics (epics typically have no sprint) + recent updates
+      jql = `project = "${projectKey}" AND (sprint is not EMPTY OR issuetype = Epic) AND updated >= -104w ORDER BY updated DESC`;
     } else {
       jql = 'updated >= -104w ORDER BY updated DESC';
     }
@@ -342,7 +400,10 @@ export class JiraService {
     this.logger.log(`Cleared ${deleted.count} previous Jira items`);
 
     do {
-      const fields = 'summary,status,priority,assignee,issuetype,customfield_10034,customfield_10020,fixVersions,created,updated';
+      const baseFields = ['summary','status','priority','assignee','issuetype','fixVersions','created','updated', fSP, fSprint, fEpicLink];
+      if (fTShirt) baseFields.push(fTShirt);
+      if (fQuarter) baseFields.push(fQuarter);
+      const fields = baseFields.filter(Boolean).join(',');
       const params = new URLSearchParams({ jql, fields, maxResults: pageSize.toString() });
       if (nextPageToken) params.set('nextPageToken', nextPageToken);
 
@@ -375,10 +436,13 @@ export class JiraService {
             type: issue.fields?.issuetype?.name || null,
             assignee: assigneeName,
             assigneeEmail: assigneeEmail,
-            storyPoints: issue.fields?.customfield_10034 || null,
-            sprint: this.extractSprintName(issue.fields),
+            storyPoints: issue.fields?.[fSP] ?? null,
+            sprint: this.extractSprintName(issue.fields, fSprint),
             fixVersion: issue.fields?.fixVersions?.[0]?.name || null,
             externalUrl: browseUrl,
+            epicKey: issue.fields?.[fEpicLink] || null,
+            tShirtSize: fTShirt ? this.normalizeTShirt(issue.fields?.[fTShirt]) : null,
+            quarter: fQuarter ? this.normalizeQuarter(issue.fields?.[fQuarter]) : null,
           };
 
           return { key: issue.key, data: itemData };
@@ -668,9 +732,8 @@ export class JiraService {
   }
 
   /** Extract sprint name from customfield_10020 (Jira Cloud sprint array) */
-  private extractSprintName(fields: any): string | null {
-    // customfield_10020 is the sprint field in Jira Cloud - array of sprint objects
-    const sprintField = fields?.customfield_10020;
+  private extractSprintName(fields: any, sprintFieldId: string = 'customfield_10020'): string | null {
+    const sprintField = fields?.[sprintFieldId];
     if (Array.isArray(sprintField) && sprintField.length > 0) {
       // Get the most recent/active sprint (last in array)
       const activeSprint = sprintField.find((s: any) => s.state === 'active') || sprintField[sprintField.length - 1];
@@ -678,6 +741,37 @@ export class JiraService {
     }
     // Fallback: try direct sprint field
     if (fields?.sprint?.name) return fields.sprint.name;
+    return null;
+  }
+
+  /** Normalize t-shirt size value from Jira to canonical XS/S/M/L/XL/XXL */
+  private normalizeTShirt(raw: any): string | null {
+    if (raw == null) return null;
+    let v: string | null = null;
+    if (typeof raw === 'string') v = raw;
+    else if (typeof raw === 'object') v = raw.value || raw.name || raw.label || null;
+    if (!v) return null;
+    const upper = v.trim().toUpperCase();
+    // Accept common variants
+    if (['XS','EXTRA SMALL','EXTRASMALL'].includes(upper)) return 'XS';
+    if (['S','SMALL'].includes(upper)) return 'S';
+    if (['M','MEDIUM'].includes(upper)) return 'M';
+    if (['L','LARGE'].includes(upper)) return 'L';
+    if (['XL','EXTRA LARGE','EXTRALARGE'].includes(upper)) return 'XL';
+    if (['XXL','XX-LARGE','XXLARGE','EXTRA EXTRA LARGE'].includes(upper)) return 'XXL';
+    return upper;
+  }
+
+  /** Normalize quarter value from Jira (custom field can be string, option, array) */
+  private normalizeQuarter(raw: any): string | null {
+    if (raw == null) return null;
+    if (typeof raw === 'string') return raw.trim() || null;
+    if (Array.isArray(raw) && raw.length > 0) {
+      const first = raw[0];
+      if (typeof first === 'string') return first.trim() || null;
+      return first?.value || first?.name || first?.label || null;
+    }
+    if (typeof raw === 'object') return raw.value || raw.name || raw.label || null;
     return null;
   }
 }
