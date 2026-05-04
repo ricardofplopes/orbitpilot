@@ -26,9 +26,13 @@ export class WorkService {
     if (filters?.sprints && filters.sprints.length > 0) {
       where.sprint = { in: filters.sprints };
     } else if (filters?.startDate || filters?.endDate) {
-      where.updatedAt = {};
-      if (filters.startDate) where.updatedAt.gte = new Date(filters.startDate);
-      if (filters.endDate) where.updatedAt.lte = new Date(filters.endDate);
+      const dateRange: any = {};
+      if (filters.startDate) dateRange.gte = new Date(filters.startDate);
+      if (filters.endDate) dateRange.lte = new Date(filters.endDate);
+      where.OR = [
+        { updatedAt: dateRange },
+        { createdAt: dateRange },
+      ];
     }
 
     const take = filters?.limit || 100;

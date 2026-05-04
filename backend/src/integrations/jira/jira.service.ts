@@ -443,6 +443,8 @@ export class JiraService {
             epicKey: issue.fields?.[fEpicLink] || null,
             tShirtSize: fTShirt ? this.normalizeTShirt(issue.fields?.[fTShirt]) : null,
             quarter: fQuarter ? this.normalizeQuarter(issue.fields?.[fQuarter]) : null,
+            createdAt: issue.fields?.created ? new Date(issue.fields.created) : new Date(),
+            updatedAt: issue.fields?.updated ? new Date(issue.fields.updated) : new Date(),
           };
 
           return { key: issue.key, data: itemData };

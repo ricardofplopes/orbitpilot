@@ -126,7 +126,7 @@ model WorkItem {
   quarter       String?
   epicKey       String?     @map("epic_key")
   createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  updatedAt     DateTime    @default(now()) @map("updated_at")
   team          Team?       @relation(fields: [teamId], references: [id])
   initiative    Initiative? @relation(fields: [initiativeId], references: [id])
 

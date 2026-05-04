@@ -29,9 +29,14 @@ export class DashboardService {
     if (sprints && sprints.length > 0) {
       dateFilter.sprint = { in: sprints };
     } else if (startDate || endDate) {
-      dateFilter.updatedAt = {};
-      if (startDate) dateFilter.updatedAt.gte = new Date(startDate);
-      if (endDate) dateFilter.updatedAt.lte = new Date(endDate);
+      // Items active in the period: updated OR created within the date range
+      const dateRange: any = {};
+      if (startDate) dateRange.gte = new Date(startDate);
+      if (endDate) dateRange.lte = new Date(endDate);
+      dateFilter.OR = [
+        { updatedAt: dateRange },
+        { createdAt: dateRange },
+      ];
     }
 
     const where = { ...teamFilter, ...dateFilter };
