@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -8,8 +8,14 @@ export class ReportsController {
   constructor(private reportsService: ReportsService) {}
 
   @Get('team/:teamId')
-  async getTeamReport(@Param('teamId') teamId: string) {
-    return this.reportsService.getTeamReport(teamId);
+  async getTeamReport(
+    @Param('teamId') teamId: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('sprints') sprints?: string,
+  ) {
+    const sprintList = sprints ? sprints.split(',').filter(Boolean) : undefined;
+    return this.reportsService.getTeamReport(teamId, startDate, endDate, sprintList);
   }
 
   @Get('quarter/:quarterPlanId')
@@ -18,7 +24,12 @@ export class ReportsController {
   }
 
   @Get('overall')
-  async getOverallReport() {
-    return this.reportsService.getOverallReport();
+  async getOverallReport(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('sprints') sprints?: string,
+  ) {
+    const sprintList = sprints ? sprints.split(',').filter(Boolean) : undefined;
+    return this.reportsService.getOverallReport(startDate, endDate, sprintList);
   }
 }

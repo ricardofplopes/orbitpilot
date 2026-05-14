@@ -11,6 +11,7 @@ import Badge from '@/components/common/Badge';
 import Spinner from '@/components/common/Spinner';
 import ErrorState from '@/components/common/ErrorState';
 import EmptyState from '@/components/common/EmptyState';
+import { toFilterRequestParams } from '@/utils/filterParams';
 
 const DashboardPage: React.FC = () => {
   const { selectedTeamId, selectedTeam } = useTeam();
@@ -22,15 +23,9 @@ const DashboardPage: React.FC = () => {
     dashboard.getSprints(selectedTeamId || undefined).then(setSprints).catch(() => {});
   }, [selectedTeamId]);
 
-  const getFilterParams = () => {
-    if (!filter) return { teamId: selectedTeamId || undefined };
-    if (filter.mode === 'sprint') return { teamId: selectedTeamId || undefined, sprints: filter.sprints };
-    return { teamId: selectedTeamId || undefined, startDate: filter.startDate, endDate: filter.endDate };
-  };
-
-  const filterParams = getFilterParams();
+  const filterParams = toFilterRequestParams(filter);
   const { data, loading, error, refetch } = useApi<any>(
-    () => dashboard.getDashboard(filterParams.teamId, (filterParams as any).startDate, (filterParams as any).endDate, (filterParams as any).sprints),
+    () => dashboard.getDashboard(selectedTeamId || undefined, filterParams.startDate, filterParams.endDate, filterParams.sprints),
     [selectedTeamId, filter]
   );
 
@@ -63,8 +58,12 @@ const DashboardPage: React.FC = () => {
       {/* Header with filter */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <p className="text-sm text-orbit-slate">Dashboard for</p>
-          <h2 className="text-2xl font-bold text-orbit-light">{selectedTeam?.name || 'Team'}</h2>
+          <p className="text-sm text-orbit-slate">Overview for</p>
+          <p className="text-lg font-semibold text-orbit-light">{selectedTeam?.name || 'Team'}</p>
+          <p className="text-xs text-orbit-slate mt-1">
+            Scope: {filter?.mode === 'sprint' ? `${filter.sprints.length} sprint(s)` : (filter?.label || 'All time')}
+            {' '}· Team members and work items use the same filter contract.
+          </p>
         </div>
         <DateSprintFilter value={filter} onChange={setFilter} availableSprints={sprints} />
       </div>
@@ -75,30 +74,35 @@ const DashboardPage: React.FC = () => {
           title="Active Work"
           value={data.committedWork}
           subtitle="In progress / todo"
+          helpText="Count of non-done items in the selected team and period. Date mode includes items created or updated in range; sprint mode uses selected sprints."
           accentColor="purple"
         />
         <MetricCard
           title="At Risk"
           value={data.atRiskWork}
           subtitle="High priority"
+          helpText="Open items marked high priority (P1/critical) within the current filter scope."
           accentColor={data.atRiskWork > 5 ? 'red' : 'amber'}
         />
         <MetricCard
           title="Done"
           value={data.doneWork}
           subtitle="Completed items"
+          helpText="Items with status done inside the selected period/sprints."
           accentColor="green"
         />
         <MetricCard
           title="Cycle Time"
           value={data.avgCycleTime ? `${data.avgCycleTime}d` : '—'}
           subtitle="Avg days to complete"
+          helpText="Average cycle time of completed items in scope. Empty when no completed items have cycle-time data."
           accentColor="blue"
         />
         <MetricCard
           title="SP Delivered"
           value={data.totalSpDelivered || data.totalItemsDelivered || 0}
           subtitle={data.totalSpDelivered ? "Story points done" : "Items delivered"}
+          helpText="Sum of delivered work across sprint velocity rows. In sprint mode this follows selected sprints; in date mode velocity remains sprint-based."
           accentColor="purple"
         />
       </div>

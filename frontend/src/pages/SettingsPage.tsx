@@ -84,7 +84,6 @@ const SettingsPage: React.FC = () => {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h2 className="text-2xl font-bold text-orbit-light">Settings</h2>
         <p className="text-sm text-orbit-slate mt-1">Manage your profile and app preferences</p>
       </div>
 

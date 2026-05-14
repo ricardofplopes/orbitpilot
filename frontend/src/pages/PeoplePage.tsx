@@ -42,7 +42,6 @@ const PeoplePage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-orbit-light">People</h2>
         <p className="text-sm text-orbit-slate mt-1">All team members across your organization</p>
       </div>
 

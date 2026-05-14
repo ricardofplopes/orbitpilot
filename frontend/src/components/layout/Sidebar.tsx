@@ -32,7 +32,7 @@ const Sidebar: React.FC = () => {
   return (
     <aside className="fixed left-0 top-0 h-screen w-60 bg-orbit-navy border-r border-orbit-navy-lighter/50 flex flex-col z-30">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-orbit-navy-lighter/50">
+      <div className="h-16 flex items-center gap-3 px-5 border-b border-orbit-navy-lighter/50">
         <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center">
           <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="4" />

@@ -302,12 +302,24 @@ export const settings = {
 
 // Reports
 export const reports = {
-  getOverall: async () => {
-    const { data } = await client.get('/reports/overall');
+  getOverall: async (filters?: { startDate?: string; endDate?: string; sprints?: string[] }) => {
+    const params: any = {};
+    if (filters?.sprints?.length) params.sprints = filters.sprints.join(',');
+    else {
+      if (filters?.startDate) params.startDate = filters.startDate;
+      if (filters?.endDate) params.endDate = filters.endDate;
+    }
+    const { data } = await client.get('/reports/overall', { params });
     return data;
   },
-  getTeamReport: async (teamId: string) => {
-    const { data } = await client.get(`/reports/team/${teamId}`);
+  getTeamReport: async (teamId: string, filters?: { startDate?: string; endDate?: string; sprints?: string[] }) => {
+    const params: any = {};
+    if (filters?.sprints?.length) params.sprints = filters.sprints.join(',');
+    else {
+      if (filters?.startDate) params.startDate = filters.startDate;
+      if (filters?.endDate) params.endDate = filters.endDate;
+    }
+    const { data } = await client.get(`/reports/team/${teamId}`, { params });
     return data;
   },
   getQuarterReport: async (quarterPlanId: string) => {

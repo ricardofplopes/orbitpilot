@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { buildWorkItemWhere } from '../common/work-item-filter';
 
 /** Extract year and sprint number for sorting. Returns [year, number] or [0, 0] if no match. */
 function parseSprintNumber(name: string): [number, number] {
@@ -22,26 +23,9 @@ export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
   async getDashboardData(teamId?: string, startDate?: string, endDate?: string, sprints?: string[]) {
-    const teamFilter: any = teamId ? { teamId } : {};
-
-    // Build date/sprint filter
-    const dateFilter: any = {};
-    if (sprints && sprints.length > 0) {
-      dateFilter.sprint = { in: sprints };
-    } else if (startDate || endDate) {
-      // Items active in the period: updated OR created within the date range
-      const dateRange: any = {};
-      if (startDate) dateRange.gte = new Date(startDate);
-      if (endDate) dateRange.lte = new Date(endDate);
-      dateFilter.OR = [
-        { updatedAt: dateRange },
-        { createdAt: dateRange },
-      ];
-    }
-
-    const where = { ...teamFilter, ...dateFilter };
+    const where = buildWorkItemWhere({ teamId, startDate, endDate, sprints });
     // Sprint velocity should NOT be filtered by date — sprints are their own time boundary
-    const sprintWhere = { ...teamFilter, sprint: { not: null } };
+    const sprintWhere: any = teamId ? { teamId, sprint: { not: null } } : { sprint: { not: null } };
     // If sprint filter is active, use it for sprint data too
     if (sprints && sprints.length > 0) {
       (sprintWhere as any).sprint = { in: sprints };

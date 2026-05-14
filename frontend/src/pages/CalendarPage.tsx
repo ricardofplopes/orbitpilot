@@ -195,7 +195,6 @@ const CalendarPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-orbit-light">Calendar</h2>
           <p className="text-sm text-orbit-slate mt-1">
             Team PTO and release schedule for {selectedTeam?.name || 'team'}
           </p>

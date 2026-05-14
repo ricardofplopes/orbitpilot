@@ -111,7 +111,7 @@ const TeamsPage: React.FC = () => {
     <div className="space-y-6">
       <div>
         <p className="text-sm text-orbit-slate">Members of</p>
-        <h2 className="text-2xl font-bold text-orbit-light">{selectedTeam?.name || 'Team'}</h2>
+        <p className="text-lg font-semibold text-orbit-light">{selectedTeam?.name || 'Team'}</p>
         <p className="text-sm text-orbit-slate mt-1">{counts.active} active of {counts.all} total members</p>
       </div>
 

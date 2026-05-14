@@ -549,7 +549,6 @@ const IntegrationsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-orbit-light">Integrations</h2>
         <p className="text-sm text-orbit-slate mt-1">Connect your tools using OAuth or API tokens</p>
       </div>
 

@@ -48,7 +48,6 @@ const CapacityPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-orbit-light">Capacity</h2>
           <p className="text-sm text-orbit-slate mt-1">
             Velocity-based capacity for {selectedTeam?.name || 'team'}
           </p>

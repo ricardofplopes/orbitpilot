@@ -9,8 +9,7 @@ import Spinner from '@/components/common/Spinner';
 import ErrorState from '@/components/common/ErrorState';
 import EmptyState from '@/components/common/EmptyState';
 import Badge from '@/components/common/Badge';
-import client from '@/api/client';
-import type { Team } from '@/types';
+import { toFilterRequestParams } from '@/utils/filterParams';
 
 const COLORS = ['#2563EB', '#7C3AED', '#10B981', '#F59E0B', '#EF4444', '#06B6D4'];
 
@@ -23,11 +22,15 @@ const ReportsPage: React.FC = () => {
   useEffect(() => {
     dashboardApi.getSprints(selectedTeamId || undefined).then(setSprints).catch(() => {});
   }, [selectedTeamId]);
+  const filterParams = toFilterRequestParams(dateFilter);
 
-  const { data: overallData, loading, error, refetch } = useApi<any>(() => reports.getOverall());
+  const { data: overallData, loading, error, refetch } = useApi<any>(
+    () => reports.getOverall(filterParams),
+    [dateFilter]
+  );
   const { data: teamReport } = useApi<any>(
-    () => selectedTeamId ? reports.getTeamReport(selectedTeamId) : Promise.resolve(null),
-    [selectedTeamId]
+    () => selectedTeamId ? reports.getTeamReport(selectedTeamId, filterParams) : Promise.resolve(null),
+    [selectedTeamId, dateFilter]
   );
   // Sprint data from dashboard endpoint with date filter applied
   const { data: sprintData } = useApi<any>(
@@ -50,8 +53,10 @@ const ReportsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-orbit-light">Reports</h2>
           <p className="text-sm text-orbit-slate mt-1">Analytics and insights across your team and sprints</p>
+          <p className="text-xs text-orbit-slate mt-1">
+            Scope: {dateFilter?.mode === 'sprint' ? `${dateFilter.sprints.length} sprint(s)` : (dateFilter?.label || 'All time')}
+          </p>
         </div>
         <DateSprintFilter value={dateFilter} onChange={setDateFilter} availableSprints={sprints} />
       </div>
@@ -81,20 +86,28 @@ const ReportsPage: React.FC = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <MetricCard title="Sprints" value={sprintData.velocity.length} accentColor="blue" />
+                <MetricCard
+                  title="Sprints"
+                  value={sprintData.velocity.length}
+                  helpText="Number of sprint rows returned under the selected filter. In date mode this shows recent sprint velocity; in sprint mode only selected sprints."
+                  accentColor="blue"
+                />
                 <MetricCard
                   title="Avg Items/Sprint"
                   value={Math.round(sprintData.velocity.reduce((s: number, v: any) => s + v.itemCount, 0) / sprintData.velocity.length)}
+                  helpText="Average completed items per sprint across the visible sprint rows."
                   accentColor="purple"
                 />
                 <MetricCard
                   title="Total Items Delivered"
                   value={sprintData.velocity.reduce((s: number, v: any) => s + v.itemCount, 0)}
+                  helpText="Total issue count delivered across visible sprint rows."
                   accentColor="green"
                 />
                 <MetricCard
                   title="Total SP Delivered"
                   value={sprintData.velocity.reduce((s: number, v: any) => s + v.storyPoints, 0)}
+                  helpText="Total story points delivered across visible sprint rows."
                   accentColor="amber"
                 />
               </div>
@@ -153,10 +166,10 @@ const ReportsPage: React.FC = () => {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <MetricCard title="Members" value={teamReport.memberCount} accentColor="blue" />
-                <MetricCard title="Work Items" value={teamReport.totalWorkItems} accentColor="purple" />
-                <MetricCard title="Completion" value={`${teamReport.completionRate}%`} accentColor="green" />
-                <MetricCard title="Cycle Time" value={`${teamReport.avgCycleTime}d`} accentColor="amber" />
+                <MetricCard title="Members" value={teamReport.memberCount} helpText="Active members in the selected team (not date-filtered)." accentColor="blue" />
+                <MetricCard title="Work Items" value={teamReport.totalWorkItems} helpText="Team work items matching the selected date/sprint scope." accentColor="purple" />
+                <MetricCard title="Completion" value={`${teamReport.completionRate}%`} helpText="Completed story points divided by total story points in scope." accentColor="green" />
+                <MetricCard title="Cycle Time" value={`${teamReport.avgCycleTime}d`} helpText="Average cycle time for done work items in scope." accentColor="amber" />
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -198,10 +211,10 @@ const ReportsPage: React.FC = () => {
       {tab === 'overall' && overallData && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard title="Teams" value={overallData.totalTeams} accentColor="blue" />
-            <MetricCard title="Members" value={overallData.totalMembers} accentColor="purple" />
-            <MetricCard title="Work Items" value={overallData.totalWorkItems} accentColor="green" />
-            <MetricCard title="Avg Cycle Time" value={`${overallData.avgCycleTime}d`} accentColor="amber" />
+            <MetricCard title="Teams" value={overallData.totalTeams} helpText="Total teams in the workspace." accentColor="blue" />
+            <MetricCard title="Members" value={overallData.totalMembers} helpText="Total team-member records in the workspace." accentColor="purple" />
+            <MetricCard title="Work Items" value={overallData.totalWorkItems} helpText="Organization-wide work items matching the selected date/sprint scope." accentColor="green" />
+            <MetricCard title="Avg Cycle Time" value={`${overallData.avgCycleTime}d`} helpText="Average cycle time for completed items in the selected scope." accentColor="amber" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

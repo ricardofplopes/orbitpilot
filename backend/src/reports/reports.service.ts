@@ -1,11 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { buildWorkItemWhere } from '../common/work-item-filter';
 
 @Injectable()
 export class ReportsService {
   constructor(private prisma: PrismaService) {}
 
-  async getTeamReport(teamId: string) {
+  async getTeamReport(teamId: string, startDate?: string, endDate?: string, sprints?: string[]) {
+    const workWhere = buildWorkItemWhere({ teamId, startDate, endDate, sprints });
     const team = await this.prisma.team.findUnique({
       where: { id: teamId },
       include: {
@@ -17,20 +19,21 @@ export class ReportsService {
       },
     });
     if (!team) throw new NotFoundException('Team not found');
+    const filteredWorkItems = await this.prisma.workItem.findMany({ where: workWhere });
 
     const workByStatus = {
-      todo: team.workItems.filter((w) => w.status === 'todo').length,
-      in_progress: team.workItems.filter((w) => w.status === 'in_progress').length,
-      in_review: team.workItems.filter((w) => w.status === 'in_review').length,
-      done: team.workItems.filter((w) => w.status === 'done').length,
+      todo: filteredWorkItems.filter((w) => w.status === 'todo').length,
+      in_progress: filteredWorkItems.filter((w) => w.status === 'in_progress').length,
+      in_review: filteredWorkItems.filter((w) => w.status === 'in_review').length,
+      done: filteredWorkItems.filter((w) => w.status === 'done').length,
     };
 
-    const totalPoints = team.workItems.reduce((s, w) => s + (w.storyPoints || 0), 0);
-    const completedPoints = team.workItems
+    const totalPoints = filteredWorkItems.reduce((s, w) => s + (w.storyPoints || 0), 0);
+    const completedPoints = filteredWorkItems
       .filter((w) => w.status === 'done')
       .reduce((s, w) => s + (w.storyPoints || 0), 0);
 
-    const completedWithCycle = team.workItems.filter((w) => w.status === 'done' && w.cycleTime);
+    const completedWithCycle = filteredWorkItems.filter((w) => w.status === 'done' && w.cycleTime);
     const avgCycleTime = completedWithCycle.length > 0
       ? Math.round((completedWithCycle.reduce((s, w) => s + (w.cycleTime || 0), 0) / completedWithCycle.length) * 10) / 10
       : 0;
@@ -40,7 +43,7 @@ export class ReportsService {
       memberCount: team.members.length,
       members: team.members.map((m) => ({ id: m.id, name: m.user.name, role: m.role })),
       workByStatus,
-      totalWorkItems: team.workItems.length,
+      totalWorkItems: filteredWorkItems.length,
       totalPoints,
       completedPoints,
       completionRate: totalPoints > 0 ? Math.round((completedPoints / totalPoints) * 100) : 0,
@@ -97,10 +100,11 @@ export class ReportsService {
     };
   }
 
-  async getOverallReport() {
+  async getOverallReport(startDate?: string, endDate?: string, sprints?: string[]) {
+    const workWhere = buildWorkItemWhere({ startDate, endDate, sprints });
     const [teams, workItems, plans, insights] = await Promise.all([
       this.prisma.team.findMany({ include: { members: true, workItems: true } }),
-      this.prisma.workItem.findMany(),
+      this.prisma.workItem.findMany({ where: workWhere }),
       this.prisma.quarterPlan.findMany({ include: { initiatives: true } }),
       this.prisma.insight.findMany({ orderBy: { createdAt: 'desc' }, take: 10 }),
     ]);
@@ -118,13 +122,25 @@ export class ReportsService {
       ? Math.round((completedWithCycle.reduce((s, w) => s + (w.cycleTime || 0), 0) / completedWithCycle.length) * 10) / 10
       : 0;
 
-    const teamSummaries = teams.map((t) => ({
-      id: t.id,
-      name: t.name,
-      memberCount: t.members.length,
-      totalWork: t.workItems.length,
-      completedWork: t.workItems.filter((w) => w.status === 'done').length,
-    }));
+    const teamWorkMap = new Map<string, { totalWork: number; completedWork: number }>();
+    for (const item of workItems) {
+      const key = item.teamId || '__unassigned__';
+      const current = teamWorkMap.get(key) || { totalWork: 0, completedWork: 0 };
+      current.totalWork += 1;
+      if (item.status === 'done') current.completedWork += 1;
+      teamWorkMap.set(key, current);
+    }
+
+    const teamSummaries = teams.map((t) => {
+      const stats = teamWorkMap.get(t.id) || { totalWork: 0, completedWork: 0 };
+      return {
+        id: t.id,
+        name: t.name,
+        memberCount: t.members.length,
+        totalWork: stats.totalWork,
+        completedWork: stats.completedWork,
+      };
+    });
 
     return {
       totalTeams: teams.length,

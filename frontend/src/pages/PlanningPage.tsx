@@ -67,7 +67,6 @@ const PlanningPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-orbit-light">Planning</h2>
           <p className="text-sm text-orbit-slate mt-1">Epics by quarter, sized via t-shirt mapping</p>
         </div>
         <button

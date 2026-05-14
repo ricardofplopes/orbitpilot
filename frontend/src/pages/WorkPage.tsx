@@ -12,6 +12,7 @@ import Spinner from '@/components/common/Spinner';
 import ErrorState from '@/components/common/ErrorState';
 import EmptyState from '@/components/common/EmptyState';
 import type { WorkItem, Team } from '@/types';
+import { toFilterRequestParams } from '@/utils/filterParams';
 
 const statusVariant = (s: string) => {
   switch (s.toLowerCase()) {
@@ -42,11 +43,11 @@ const WorkPage: React.FC = () => {
     dashboard.getSprints(selectedTeamId || undefined).then(setSprints).catch(() => {});
   }, [selectedTeamId]);
 
+  const filterParams = toFilterRequestParams(dateFilter);
   const effectiveFilters = {
     ...filters,
     teamId: filters.teamId || selectedTeamId || undefined,
-    ...(dateFilter?.mode === 'sprint' ? { sprints: dateFilter.sprints } : {}),
-    ...(dateFilter?.mode === 'date' ? { startDate: dateFilter.startDate, endDate: dateFilter.endDate } : {}),
+    ...filterParams,
   };
   const { data: items, loading, error, refetch } = useApi<WorkItem[]>(() => work.getWorkItems(effectiveFilters), [selectedTeamId, filters.teamId, filters.status, filters.source, dateFilter]);
   const { data: teamsList } = useApi<Team[]>(() => teamsApi.getTeams());
@@ -161,7 +162,6 @@ const WorkPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-orbit-light">Work Items</h2>
           <p className="text-sm text-orbit-slate mt-1">Track and manage all work across teams</p>
         </div>
         <Button onClick={openCreate}>

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateWorkItemDto, UpdateWorkItemDto } from './dto/create-work-item.dto';
+import { buildWorkItemWhere } from '../common/work-item-filter';
 
 @Injectable()
 export class WorkService {
@@ -17,23 +18,15 @@ export class WorkService {
     limit?: number;
     offset?: number;
   }) {
-    const where: any = {};
-    if (filters?.teamId) where.teamId = filters.teamId;
+    const where: any = buildWorkItemWhere({
+      teamId: filters?.teamId,
+      startDate: filters?.startDate,
+      endDate: filters?.endDate,
+      sprints: filters?.sprints,
+    });
     if (filters?.status) where.status = filters.status;
     if (filters?.source) where.source = filters.source;
     if (filters?.initiativeId) where.initiativeId = filters.initiativeId;
-
-    if (filters?.sprints && filters.sprints.length > 0) {
-      where.sprint = { in: filters.sprints };
-    } else if (filters?.startDate || filters?.endDate) {
-      const dateRange: any = {};
-      if (filters.startDate) dateRange.gte = new Date(filters.startDate);
-      if (filters.endDate) dateRange.lte = new Date(filters.endDate);
-      where.OR = [
-        { updatedAt: dateRange },
-        { createdAt: dateRange },
-      ];
-    }
 
     const take = filters?.limit || 100;
     const skip = filters?.offset || 0;

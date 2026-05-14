@@ -114,7 +114,7 @@ const ReleasesPage: React.FC = () => {
     <div className="space-y-6">
       <div>
         <p className="text-sm text-orbit-slate">Releases for</p>
-        <h2 className="text-2xl font-bold text-orbit-light">{selectedTeam?.name || 'Team'}</h2>
+        <p className="text-lg font-semibold text-orbit-light">{selectedTeam?.name || 'Team'}</p>
       </div>
 
       {/* Toolbar */}
